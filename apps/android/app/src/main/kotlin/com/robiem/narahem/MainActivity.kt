@@ -340,7 +340,8 @@ class MainActivity : ComponentActivity() {
                 notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             },
             onAskConsent = { consentDialog = true },
-            onSignedOut = { tab = "map" }
+            onSignedOut = { tab = "map" },
+            mapShowing = { tab == "map" }
         )
         BackHandler(enabled = state.account != null && tab != "map") { tab = "map" }
         BackHandler(enabled = state.account != null && tab == "places" && placeEditor.open) {
@@ -453,7 +454,8 @@ class MainActivity : ComponentActivity() {
         askLocation: () -> Unit,
         askNotifications: () -> Unit,
         onAskConsent: () -> Unit,
-        onSignedOut: () -> Unit
+        onSignedOut: () -> Unit,
+        mapShowing: () -> Boolean
     ) {
         var deviceAttemptedFor by remember { mutableStateOf("") }
         LaunchedEffect(state.account?.id) {
@@ -490,7 +492,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         LaunchedEffect(state.account?.id) {
-            if (state.account != null) model.refreshHouseholdWhileOpen()
+            if (state.account != null) model.refreshHouseholdWhileOpen(mapShowing)
         }
         LaunchedEffect(state.joinedMembers) {
             if (state.joinedMembers.isNotEmpty()) {

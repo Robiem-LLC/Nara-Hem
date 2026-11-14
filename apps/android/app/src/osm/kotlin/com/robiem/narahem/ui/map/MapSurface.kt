@@ -1,5 +1,6 @@
 package com.robiem.narahem.ui.map
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,10 @@ import java.io.File
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
+import org.maplibre.android.annotations.Annotation
+import org.maplibre.android.annotations.Icon
 import org.maplibre.android.annotations.IconFactory
+import org.maplibre.android.annotations.Marker
 import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.annotations.PolygonOptions
 import org.maplibre.android.annotations.PolylineOptions
@@ -65,6 +69,9 @@ private const val OSM_STYLE = """{
 }"""
 
 private var tileHttp: OkHttpClient? = null
+
+/** Marker id for this phone's own fix, when it isn't one of the household's members. */
+private const val THIS_PHONE = "this-phone"
 
 /** OpenStreetMap map (MapLibre) showing member avatars and saved place circles. */
 @Suppress("DEPRECATION")
@@ -96,8 +103,50 @@ fun MapSurface(
     var drawnSnapshot by remember {
         mutableStateOf<Triple<List<HouseholdPerson>, List<HouseholdPlace>, LocalFix?>?>(null)
     }
+    val markers = remember { mutableMapOf<String, Marker>() }
+    val looks = remember { mutableMapOf<String, List<Any?>>() }
+    val boundaries = remember { mutableListOf<Annotation>() }
+    val motion = remember { MarkerMotion() }
+    val frames = remember {
+        MarkerFrames { now ->
+            for (id in motion.gliding) {
+                val position = motion.positionAt(id, now) ?: continue
+                markers[id]?.position = LatLng(position.first, position.second)
+            }
+            motion.moving
+        }
+    }
+    DisposableEffect(Unit) { onDispose { frames.stop() } }
 
-    /** Replaces the markers and circles with the latest data. */
+    /**
+     * Shows a member's marker at their latest fix: added the first time, then glided there. The
+     * photo is only redrawn when it changes.
+     */
+    fun place(
+        map: MapLibreMap,
+        id: String,
+        fix: Pair<Double, Double>,
+        capturedAt: Long,
+        title: String,
+        look: List<Any?>,
+        icon: () -> Icon?
+    ) {
+        val marker = markers[id]
+        val shown = marker?.position?.let { it.latitude to it.longitude }
+        val at = motion.update(id, shown, fix, capturedAt, SystemClock.uptimeMillis())
+        if (marker == null) {
+            val options = MarkerOptions().position(LatLng(at.first, at.second)).title(title)
+            icon()?.let { options.icon(it) }
+            markers[id] = map.addMarker(options)
+        } else {
+            marker.title = title
+            if (looks[id] != look) icon()?.let { marker.icon = it }
+            marker.position = LatLng(at.first, at.second)
+        }
+        looks[id] = look
+    }
+
+    /** Updates the markers and place outlines with the latest data. */
     fun redraw(map: MapLibreMap) {
         @Suppress("DEPRECATION")
         map.setPadding(0, 0, 0, bottomPixels)
@@ -107,38 +156,64 @@ fun MapSurface(
         if (map.style?.isFullyLoaded != true) return
         val currentSnapshot = Triple(latestPeople, latestPlaces, latestFix)
         if (currentSnapshot != drawnSnapshot) {
-            map.clear()
+            if (latestPlaces != drawnSnapshot?.second) {
+                boundaries.forEach { map.removeAnnotation(it) }
+                boundaries.clear()
+                for (place in latestPlaces) {
+                    boundaries += drawPlaceBoundary(
+                        map,
+                        place.latitude,
+                        place.longitude,
+                        place.radius
+                    )
+                }
+            }
             val fan = AvatarFan.layout(latestPeople, latestPlaces, ProfilePhotos.MARKER_PIXELS)
+            val onMap = mutableSetOf<String>()
             for (person in latestPeople) {
-                if (person.latitude != null && person.longitude != null) {
-                    val freshness = LocationFreshness.of(person)
-                    val stale = freshness.alarming
-                    val marker = MarkerOptions().position(LatLng(person.latitude, person.longitude))
-                        .title(person.name + freshness.suffix)
+                val latitude = person.latitude ?: continue
+                val longitude = person.longitude ?: continue
+                val freshness = LocationFreshness.of(person)
+                val stale = freshness.alarming
+                val look = listOf(person.photo, person.name, stale, fan[person.id])
+                onMap += person.id
+                place(
+                    map,
+                    person.id,
+                    latitude to longitude,
+                    person.capturedAt,
+                    person.name + freshness.suffix,
+                    look
+                ) {
                     val photo = ProfilePhotos.fanned(
                         ProfilePhotos.roundMarker(person.photo, stale = stale)
                             ?: ProfilePhotos.initialsMarker(person.name, stale = stale),
                         fan[person.id]
                     )
-                    marker.icon(IconFactory.getInstance(context).fromBitmap(photo))
-                    map.addMarker(marker)
+                    IconFactory.getInstance(context).fromBitmap(photo)
                 }
             }
-            for (place in latestPlaces) {
-                drawPlaceBoundary(map, place.latitude, place.longitude, place.radius)
-            }
-            if (latestPeople.none {
+            val own = latestFix
+            if (own != null && latestPeople.none {
                     it.id == latestOwn && it.latitude != null && it.longitude != null
                 }
             ) {
-                latestFix?.let {
-                    map.addMarker(
-                        MarkerOptions().position(
-                            LatLng(it.latitude, it.longitude)
-                        ).title("This phone")
-                    )
-                }
+                onMap += THIS_PHONE
+                place(
+                    map,
+                    THIS_PHONE,
+                    own.latitude to own.longitude,
+                    own.capturedAtMillis ?: System.currentTimeMillis(),
+                    "This phone",
+                    emptyList()
+                ) { null }
             }
+            for (id in markers.keys - onMap) {
+                markers.remove(id)?.let { map.removeMarker(it) }
+                looks.remove(id)
+                motion.forget(id)
+            }
+            if (motion.moving) frames.start()
             drawnSnapshot = currentSnapshot
         }
         if (!centered || appliedFocus != latestFocus) {
@@ -299,18 +374,19 @@ private fun drawPlaceBoundary(
     latitude: Double,
     longitude: Double,
     radius: Double
-) {
+): List<Annotation> {
     val vertices = PlaceGeometry.circle(latitude, longitude, radius)
         .map { LatLng(it.first, it.second) }
     // MapLibre annotations don't reliably keep ARGB alpha, so opacity is set separately.
-    map.addPolygon(
+    val fill = map.addPolygon(
         PolygonOptions().addAll(vertices)
             .fillColor(NaraHemColors.Place.toArgb()).alpha(0.12f)
     )
-    map.addPolyline(
+    val outline = map.addPolyline(
         PolylineOptions().addAll(vertices + vertices.first())
             .color(NaraHemColors.Place.toArgb()).width(2f)
     )
+    return listOf(fill, outline)
 }
 
 /** OpenStreetMap map showing a trip's route with start and end markers. */

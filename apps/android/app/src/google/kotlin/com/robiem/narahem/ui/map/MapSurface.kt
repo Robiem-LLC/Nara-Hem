@@ -2,6 +2,7 @@ package com.robiem.narahem.ui.map
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,9 +33,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.Circle
 import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.robiem.narahem.data.household.HouseholdPerson
 import com.robiem.narahem.data.household.HouseholdPlace
@@ -42,6 +46,9 @@ import com.robiem.narahem.data.location.LocalFix
 import com.robiem.narahem.data.trips.TripPoint
 import com.robiem.narahem.ui.settings.ProfilePhotos
 import com.robiem.narahem.ui.theme.NaraHemColors
+
+/** Marker id for this phone's own fix, when it isn't one of the household's members. */
+private const val THIS_PHONE = "this-phone"
 
 /** Google map showing member avatars and saved place circles. */
 @Composable
@@ -72,6 +79,32 @@ fun MapSurface(
     var appliedFocus by remember { mutableIntStateOf(-1) }
     var drawnSnapshot by remember {
         mutableStateOf<Triple<List<HouseholdPerson>, List<HouseholdPlace>, LocalFix?>?>(null)
+    }
+    val markers = remember { mutableMapOf<String, Marker>() }
+    val looks = remember { mutableMapOf<String, List<Any?>>() }
+    val circles = remember { mutableListOf<Circle>() }
+    val motion = remember { MarkerMotion() }
+    val shownMap = remember { arrayOfNulls<GoogleMap>(1) }
+    val lastCameraAt = remember { longArrayOf(0) }
+    val frames = remember {
+        MarkerFrames { now ->
+            for (id in motion.gliding) {
+                val position = motion.positionAt(id, now) ?: continue
+                markers[id]?.position = LatLng(position.first, position.second)
+            }
+            val map = shownMap[0]
+            val followed = latestPerson?.let { markers[it] }
+            if (map != null && followed != null && !followPaused && now - lastCameraAt[0] >= 200) {
+                lastCameraAt[0] = now
+                val target = map.cameraPosition.target
+                val away = MarkerMotion.distanceMeters(
+                    target.latitude to target.longitude,
+                    followed.position.latitude to followed.position.longitude
+                )
+                if (away > 5) map.moveCamera(CameraUpdateFactory.newLatLng(followed.position))
+            }
+            motion.moving
+        }
     }
     val view = remember { MapView(context).apply { onCreate(null) } }
     DisposableEffect(view) {
@@ -110,9 +143,41 @@ fun MapSurface(
                 }
             }
         }
-        onDispose { handler.removeCallbacks(timeout) }
+        onDispose {
+            handler.removeCallbacks(timeout)
+            frames.stop()
+        }
     }
-    /** Replaces the markers and circles with the latest data. */
+
+    /**
+     * Shows a member's marker at their latest fix: added the first time, then glided there. The
+     * photo is only redrawn when it changes.
+     */
+    fun place(
+        map: GoogleMap,
+        id: String,
+        fix: Pair<Double, Double>,
+        capturedAt: Long,
+        title: String,
+        look: List<Any?>,
+        icon: () -> BitmapDescriptor?
+    ) {
+        val marker = markers[id]
+        val shown = marker?.position?.let { it.latitude to it.longitude }
+        val at = motion.update(id, shown, fix, capturedAt, SystemClock.uptimeMillis())
+        if (marker == null) {
+            val options = MarkerOptions().position(LatLng(at.first, at.second)).title(title)
+            icon()?.let { options.icon(it) }
+            map.addMarker(options)?.let { markers[id] = it }
+        } else {
+            marker.title = title
+            if (looks[id] != look) icon()?.let { marker.setIcon(it) }
+            marker.position = LatLng(at.first, at.second)
+        }
+        looks[id] = look
+    }
+
+    /** Updates the markers and circles with the latest data. */
     fun redraw(map: GoogleMap) {
         map.setPadding(0, 0, 0, bottomPixels)
         map.uiSettings.isMapToolbarEnabled = false
@@ -122,44 +187,65 @@ fun MapSurface(
         map.uiSettings.isTiltGesturesEnabled = false
         val currentSnapshot = Triple(latestPeople, latestPlaces, latestFix)
         if (currentSnapshot != drawnSnapshot) {
-            map.clear()
+            shownMap[0] = map
+            if (latestPlaces != drawnSnapshot?.second) {
+                circles.forEach { it.remove() }
+                circles.clear()
+                for (place in latestPlaces) {
+                    circles += map.addCircle(
+                        CircleOptions().center(LatLng(place.latitude, place.longitude))
+                            .radius(place.radius).strokeWidth(3f)
+                            .strokeColor(NaraHemColors.Place.toArgb())
+                            .fillColor(NaraHemColors.Place.copy(alpha = 0.12f).toArgb())
+                    )
+                }
+            }
             val fan = AvatarFan.layout(latestPeople, latestPlaces, ProfilePhotos.MARKER_PIXELS)
+            val onMap = mutableSetOf<String>()
             for (person in latestPeople) {
-                if (person.latitude != null && person.longitude != null) {
-                    val freshness = LocationFreshness.of(person)
-                    val stale = freshness.alarming
-                    val marker = MarkerOptions().position(LatLng(person.latitude, person.longitude))
-                        .title(person.name + freshness.suffix)
+                val latitude = person.latitude ?: continue
+                val longitude = person.longitude ?: continue
+                val freshness = LocationFreshness.of(person)
+                val stale = freshness.alarming
+                val look = listOf(person.photo, person.name, stale, fan[person.id])
+                onMap += person.id
+                place(
+                    map,
+                    person.id,
+                    latitude to longitude,
+                    person.capturedAt,
+                    person.name + freshness.suffix,
+                    look
+                ) {
                     val photo = ProfilePhotos.fanned(
                         ProfilePhotos.roundMarker(person.photo, stale = stale)
                             ?: ProfilePhotos.initialsMarker(person.name, stale = stale),
                         fan[person.id]
                     )
-                    marker.icon(BitmapDescriptorFactory.fromBitmap(photo))
-                    map.addMarker(marker)
+                    BitmapDescriptorFactory.fromBitmap(photo)
                 }
             }
-            for (place in latestPlaces) {
-                map.addCircle(
-                    CircleOptions().center(LatLng(place.latitude, place.longitude))
-                        .radius(
-                            place.radius
-                        ).strokeWidth(3f).strokeColor(NaraHemColors.Place.toArgb())
-                        .fillColor(NaraHemColors.Place.copy(alpha = 0.12f).toArgb())
-                )
-            }
-            if (latestPeople.none {
+            val own = latestFix
+            if (own != null && latestPeople.none {
                     it.id == latestOwn && it.latitude != null && it.longitude != null
                 }
             ) {
-                latestFix?.let {
-                    map.addMarker(
-                        MarkerOptions().position(
-                            LatLng(it.latitude, it.longitude)
-                        ).title("This phone")
-                    )
-                }
+                onMap += THIS_PHONE
+                place(
+                    map,
+                    THIS_PHONE,
+                    own.latitude to own.longitude,
+                    own.capturedAtMillis ?: System.currentTimeMillis(),
+                    "This phone",
+                    emptyList()
+                ) { null }
             }
+            for (id in markers.keys - onMap) {
+                markers.remove(id)?.remove()
+                looks.remove(id)
+                motion.forget(id)
+            }
+            if (motion.moving) frames.start()
             drawnSnapshot = currentSnapshot
         }
         if (!centered || appliedFocus != latestFocus) {
@@ -174,10 +260,11 @@ fun MapSurface(
                 centered = true
                 appliedFocus = latestFocus
             }
-        } else if (!followPaused && latestPerson != null) {
-            val selected = latestPeople.firstOrNull { it.id == latestPerson }
-            if (selected?.latitude != null && selected.longitude != null) {
-                val position = LatLng(selected.latitude, selected.longitude)
+        } else if (!followPaused && latestPerson != null && latestPerson !in motion.gliding) {
+            // A gliding marker is followed frame by frame instead.
+            val followed = markers[latestPerson]
+            if (followed != null) {
+                val position = followed.position
                 val distance = FloatArray(1)
                 android.location.Location.distanceBetween(
                     map.cameraPosition.target.latitude,

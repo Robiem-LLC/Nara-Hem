@@ -87,10 +87,13 @@ class AppViewModel(
         tracking.checkInNow()
     }
 
-    /** Refreshes the household every 30 seconds until cancelled. */
-    suspend fun refreshHouseholdWhileOpen(): Nothing {
+    /**
+     * Refreshes the household until cancelled: every 15 seconds while the map is showing, as on
+     * the iPhone, so people move in small steps; otherwise every 30.
+     */
+    suspend fun refreshHouseholdWhileOpen(mapShowing: () -> Boolean = { false }): Nothing {
         while (true) {
-            delay(30_000)
+            delay(if (mapShowing()) 15_000 else 30_000)
             session.refreshHousehold()
         }
     }
