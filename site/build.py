@@ -9,6 +9,7 @@ upload to any static host.
 """
 
 import datetime
+import hashlib
 import html
 import json
 import os
@@ -56,6 +57,23 @@ LINKS = {
 # in the web app's dark style; without one, OpenStreetMap.
 GOOGLE_KEY = "SITE_GOOGLE_MAPS_API_KEY"
 MAP_STYLE = WEB / "frontend/src/mapstyle.mjs"
+
+
+def versioned(output):
+    """Adds each local script and style's content hash to its address in every page, so no cache,
+    Cloudflare's or a browser's, ever serves an old copy after an update.
+    """
+    for page in output.glob("*.html"):
+        text = page.read_text()
+
+        def stamp(match):
+            asset = output / match.group(2)
+            if not asset.is_file():
+                return match.group(0)
+            digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:10]
+            return f'{match.group(1)}="{match.group(2)}?v={digest}"'
+
+        page.write_text(re.sub(r'(src|href)="([\w./-]+\.(?:js|css))"', stamp, text))
 
 
 def google_styles():
@@ -189,6 +207,7 @@ def main(media, output):
     for name in [*SETUP_VIDEOS, *(name for name, _ in PHONE_SETUP)]:
         if (media / f"{name}.mp4").exists():
             shutil.copy(media / f"{name}.mp4", output / "media")
+    versioned(output)
     print("Site built in", output)
 
 

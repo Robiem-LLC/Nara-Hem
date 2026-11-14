@@ -333,6 +333,7 @@
     if (screen === 'places') {
       const status = app.querySelector('#map-status');
       if (status) status.textContent = '';
+      googlePlaceThumbnails();
     }
     tell(screen, options.member ? { member: options.member } : {});
     app.scrollTop = 0;
@@ -580,6 +581,159 @@
     };
   }
 
+  // Google pictures for the trip and place cards (Maps Static API), drawn the way the web app
+  // draws its thumbnails. The recorded OpenStreetMap pictures stay if Google refuses.
+  const TILE = 256;
+
+  /** A point's pixel position on the Web Mercator world map at a zoom. */
+  function mercator(lat, lon, zoom) {
+    const size = TILE * 2 ** zoom;
+    const sin = Math.sin((lat * Math.PI) / 180);
+    return [
+      ((lon + 180) / 360) * size,
+      (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * size,
+    ];
+  }
+
+  /** The latitude and longitude of a pixel position. */
+  function unproject(x, y, zoom) {
+    const size = TILE * 2 ** zoom;
+    return [
+      (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / size))) * 180) / Math.PI,
+      (x / size) * 360 - 180,
+    ];
+  }
+
+  /** The highest zoom, and its top-left pixel, where every point fits in width by height. */
+  function frameView(points, width, height, pad) {
+    for (let zoom = 17; zoom >= 1; zoom--) {
+      const px = points.map((p) => mercator(p[0], p[1], zoom));
+      const xs = px.map((p) => p[0]);
+      const ys = px.map((p) => p[1]);
+      const fits =
+        Math.max(...xs) - Math.min(...xs) <= width - 2 * pad &&
+        Math.max(...ys) - Math.min(...ys) <= height - 2 * pad;
+      if (fits || zoom === 1) {
+        return {
+          zoom,
+          width,
+          height,
+          left: Math.round((Math.min(...xs) + Math.max(...xs)) / 2 - width / 2),
+          top: Math.round((Math.min(...ys) + Math.max(...ys)) / 2 - height / 2),
+        };
+      }
+    }
+    return null;
+  }
+
+  /** A Static Maps address for a view, in the web app's dark style, with optional paths. */
+  function staticUrl(view, paths = []) {
+    const [lat, lon] = unproject(view.left + view.width / 2, view.top + view.height / 2, view.zoom);
+    const params = new URLSearchParams({
+      center: lat.toFixed(6) + ',' + lon.toFixed(6),
+      zoom: String(view.zoom),
+      size: view.width + 'x' + view.height,
+      scale: '2',
+      key: GOOGLE_KEY,
+    });
+    for (const rule of SITE.google_styles || []) {
+      const style = [
+        rule.featureType && 'feature:' + rule.featureType,
+        rule.elementType && 'element:' + rule.elementType,
+        ...rule.stylers.map((s) =>
+          s.color ? 'color:0x' + s.color.slice(1) : 'visibility:' + s.visibility,
+        ),
+      ];
+      params.append('style', style.filter(Boolean).join('|'));
+    }
+    for (const path of paths) params.append('path', path);
+    return 'https://maps.googleapis.com/maps/api/staticmap?' + params;
+  }
+
+  /** Loads a Google picture and hands it over once it has loaded; nothing changes otherwise. */
+  function googlePicture(url, onLoad) {
+    const picture = new Image();
+    picture.alt = '';
+    picture.referrerPolicy = 'origin';
+    picture.onload = () => onLoad(picture);
+    picture.src = url;
+  }
+
+  /** Redraws a trip card's map with Google behind the recorded route. */
+  function googleTripThumbnail(card, trip) {
+    const target = card.querySelector('.trip-route-thumbnail');
+    const old = target?.querySelector('svg');
+    if (!GOOGLE_KEY || googleFailed || !old || trip.path.length < 2) return;
+    const [, , fullWidth, fullHeight] = (old.getAttribute('viewBox') || '').split(' ').map(Number);
+    if (!fullWidth || !fullHeight) return;
+    const width = Math.min(640, fullWidth);
+    const height = Math.round((fullHeight * width) / fullWidth);
+    const view = frameView(trip.path, width, height, 18);
+    if (!view) return;
+    googlePicture(staticUrl(view), (picture) => {
+      if (!target.isConnected) return;
+      picture.className = 'trip-tiles';
+      const svg = old.cloneNode(false);
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      const points = trip.path
+        .map((p) => mercator(p[0], p[1], view.zoom))
+        .map(([x, y]) => [x - view.left, y - view.top]);
+      const text = points.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+      const casing = old.querySelector('path')?.cloneNode(false);
+      const line = old.querySelector('polyline')?.cloneNode(false);
+      casing?.setAttribute('d', 'M' + text.replaceAll(' ', ' L'));
+      line?.setAttribute('points', text);
+      const dots = [...old.querySelectorAll('circle')].map((dot, index) => {
+        const copy = dot.cloneNode(false);
+        const [x, y] = index ? points.at(-1) : points[0];
+        copy.setAttribute('cx', x.toFixed(1));
+        copy.setAttribute('cy', y.toFixed(1));
+        return copy;
+      });
+      svg.append(...[casing, line, ...dots].filter(Boolean));
+      target.replaceChildren(picture, svg);
+    });
+  }
+
+  /** Redraws each place card's picture with Google and the place's circle. */
+  function googlePlaceThumbnails() {
+    if (!GOOGLE_KEY || googleFailed) return;
+    for (const card of app.querySelectorAll('.place-card')) {
+      const holder = card.querySelector('.place-card-photo');
+      const name = card.querySelector('.place-card-details strong')?.textContent;
+      const place = D.places.find((p) => p.name === name);
+      if (!holder || !place) continue;
+      const width = Math.min(640, Math.round(holder.clientWidth || 180));
+      const height = Math.min(640, Math.round(holder.clientHeight || 98));
+      const delta = Math.max((place.radius * 2.5) / 111320, 0.00065);
+      const across = delta / Math.max(0.2, Math.cos((place.lat * Math.PI) / 180));
+      const corners = [
+        [place.lat - delta, place.lon - across],
+        [place.lat + delta, place.lon + across],
+      ];
+      const view = frameView(corners, width, height, 8);
+      if (!view) continue;
+      const ring = [];
+      for (let i = 0; i <= 36; i++) {
+        const angle = (i * Math.PI) / 18;
+        ring.push(
+          (place.lat + (place.radius / 111320) * Math.sin(angle)).toFixed(6) +
+            ',' +
+            (
+              place.lon +
+              ((place.radius / 111320) * Math.cos(angle)) / Math.cos((place.lat * Math.PI) / 180)
+            ).toFixed(6),
+        );
+      }
+      const circle = 'color:0xa5f0bcff|weight:2|fillcolor:0xa5f0bc33|' + ring.join('|');
+      googlePicture(staticUrl(view, [circle]), (picture) => {
+        if (!holder.isConnected) return;
+        picture.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+        holder.replaceChildren(picture);
+      });
+    }
+  }
+
   /** Shows the household map with members' photos and two members driving. */
   async function liveMap() {
     const old = app.querySelector('#household-map');
@@ -698,6 +852,7 @@
         (t) => t.member === chosen && t.origin === origin && t.destination === destination,
       );
       if (!button || !trip) continue;
+      googleTripThumbnail(card, trip);
       button.addEventListener('click', (event) => {
         event.stopImmediatePropagation();
         openTrip(card, trip, title);
