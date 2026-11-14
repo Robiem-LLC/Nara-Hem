@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -51,6 +52,22 @@ LINKS = {
     "android": "NARAHEM_ANDROID_APP_URL",
     "github": "SITE_GITHUB",
 }
+# With a Google Maps browser key (restricted to the site's domain), the demo map uses Google Maps
+# in the web app's dark style; without one, OpenStreetMap.
+GOOGLE_KEY = "SITE_GOOGLE_MAPS_API_KEY"
+MAP_STYLE = WEB / "frontend/src/mapstyle.mjs"
+
+
+def google_styles():
+    """Returns the web app's dark Google Maps style, read from its source with Node."""
+    script = (
+        f"import({json.dumps(MAP_STYLE.as_uri())})"
+        ".then((m) => console.log(JSON.stringify(m.GOOGLE_DARK_STYLES)))"
+    )
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True
+    )
+    return json.loads(result.stdout)
 
 
 def button(link, label):
@@ -155,6 +172,11 @@ def main(media, output):
         **{k: config.get(k, "") for k in ("name", "github", "testflight", "android", "contact")},
         "alexa_name": config.get("alexa_name") or config["name"],
         "install": "setup.html",
+        **(
+            {"google_maps_key": key, "google_styles": google_styles()}
+            if (key := os.environ.get(GOOGLE_KEY, "").strip())
+            else {}
+        ),
         "media": {name: (media / f"{name}.mp4").exists() for name in ("ios", "android")},
     }
     (output / "demo" / "data.js").write_text("window.NARAHEM_DEMO = " + json.dumps(demo) + ";\n")

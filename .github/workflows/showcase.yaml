@@ -248,6 +248,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SITE_DOMAIN: ${{ secrets.SITE_DOMAIN || vars.SITE_DOMAIN }}
+          SITE_GOOGLE_MAPS_API_KEY: ${{ secrets.SITE_GOOGLE_MAPS_API_KEY || vars.SITE_GOOGLE_MAPS_API_KEY }}
           SITE_GITHUB: ${{ github.server_url }}/${{ github.repository }}
           NARAHEM_IOS_APP_URL: ${{ secrets.NARAHEM_IOS_APP_URL || vars.NARAHEM_IOS_APP_URL }}
           NARAHEM_ANDROID_APP_URL: ${{ secrets.NARAHEM_ANDROID_APP_URL || vars.NARAHEM_ANDROID_APP_URL || format('{0}/{1}/releases/latest/download/NaraHem-Android.apk', github.server_url, github.repository) }}

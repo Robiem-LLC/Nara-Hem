@@ -26,6 +26,10 @@
     '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" ' +
     'rel="noopener">OpenStreetMap</a> contributors';
   const MINT = '#a5f0bc';
+  // With a Google key built in, the demo shows Google Maps like a real server with a key.
+  const GOOGLE_KEY = FROM_DISK ? '' : SITE.google_maps_key || '';
+  let googleLoad = null;
+  let googleFailed = false;
   const places = Object.fromEntries(D.places.map((p) => [p.name, [p.lat, p.lon]]));
   let map = null;
   let ticker = null;
@@ -374,8 +378,204 @@
     );
   }
 
+  /** Loads Google Maps once; rejects when there is no key or it can't load. */
+  function loadGoogle() {
+    if (!GOOGLE_KEY || googleFailed) return Promise.reject(new Error('No Google Maps'));
+    googleLoad ??= new Promise((resolve, reject) => {
+      window.naraHemDemoGoogle = () => resolve(window.google.maps);
+      // A refused key shows up only after the map is made: go back to OpenStreetMap.
+      window.gm_authFailure = () => {
+        googleFailed = true;
+        if (map?.google) show('map');
+      };
+      const script = document.createElement('script');
+      script.src =
+        'https://maps.googleapis.com/maps/api/js?' +
+        new URLSearchParams({
+          key: GOOGLE_KEY,
+          loading: 'async',
+          callback: 'naraHemDemoGoogle',
+          v: 'quarterly',
+        });
+      script.async = true;
+      script.onerror = () => {
+        googleFailed = true;
+        reject(new Error('Google Maps could not load'));
+      };
+      document.head.append(script);
+    });
+    return googleLoad;
+  }
+
+  /**
+   * Makes a map in holder: Google Maps when the site has a key, otherwise OpenStreetMap. Returns
+   * the same small interface either way: circle, person, onClick, fit, line, dot and remove.
+   */
+  async function demoMap(holder) {
+    try {
+      return googleMap(await loadGoogle(), holder);
+    } catch {
+      return leafletMap(holder);
+    }
+  }
+
+  /** The OpenStreetMap (Leaflet) version of the demo map. */
+  function leafletMap(holder) {
+    const leaflet = L.map(holder, { scrollWheelZoom: false });
+    tiles(leaflet);
+    return {
+      google: false,
+      circle(place) {
+        L.circle([place.lat, place.lon], { radius: place.radius, color: MINT })
+          .addTo(leaflet)
+          .bindPopup(place.name);
+      },
+      person(start, icon) {
+        const marker = L.marker(start, {
+          icon: L.divIcon({
+            html: icon,
+            className: 'person-marker',
+            iconSize: [96, 70],
+            iconAnchor: [48, 52],
+          }),
+        }).addTo(leaflet);
+        return {
+          move: (point) => marker.setLatLng(point),
+          position: () => [marker.getLatLng().lat, marker.getLatLng().lng],
+        };
+      },
+      onClick: (handler) => leaflet.on('click', handler),
+      fit(points) {
+        leaflet.invalidateSize();
+        leaflet.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+      },
+      line(path, color, weight, opacity = 1) {
+        L.polyline(path, { color, weight, opacity }).addTo(leaflet);
+      },
+      dot(point, fill, label) {
+        L.circleMarker(point, {
+          radius: 7,
+          color: '#0f1720',
+          weight: 2,
+          fillColor: fill,
+          fillOpacity: 1,
+        })
+          .addTo(leaflet)
+          .bindTooltip(label);
+      },
+      remove: () => leaflet.remove(),
+    };
+  }
+
+  /** The Google Maps version of the demo map, styled like the real web app. */
+  function googleMap(maps, holder) {
+    holder.replaceChildren();
+    const gmap = new maps.Map(holder, {
+      center: { lat: 0, lng: 0 },
+      zoom: 2,
+      gestureHandling: 'cooperative',
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      styles: SITE.google_styles || [],
+      backgroundColor: '#1f2a36',
+    });
+    const info = new maps.InfoWindow();
+    const overlays = [];
+    return {
+      google: true,
+      circle(place) {
+        const circle = new maps.Circle({
+          map: gmap,
+          center: { lat: place.lat, lng: place.lon },
+          radius: place.radius,
+          strokeColor: MINT,
+          strokeWeight: 3,
+          fillColor: MINT,
+          fillOpacity: 0.12,
+        });
+        circle.addListener('click', () => {
+          info.setContent(place.name);
+          info.setPosition(circle.getCenter());
+          info.open(gmap);
+        });
+      },
+      person(start, icon) {
+        let at = new maps.LatLng(start[0], start[1]);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'person-marker';
+        wrapper.style.cssText =
+          'position:absolute;z-index:10;width:96px;height:70px;transform:translate(-48px,-52px)';
+        wrapper.append(icon);
+        /** Keeps the member's photo at their position on the map. */
+        class Person extends maps.OverlayView {
+          onAdd() {
+            this.getPanes().overlayMouseTarget.append(wrapper);
+            maps.OverlayView.preventMapHitsAndGesturesFrom(wrapper);
+          }
+
+          draw() {
+            const pixel = this.getProjection()?.fromLatLngToDivPixel(at);
+            if (pixel) {
+              wrapper.style.left = `${pixel.x}px`;
+              wrapper.style.top = `${pixel.y}px`;
+            }
+          }
+
+          onRemove() {
+            wrapper.remove();
+          }
+        }
+        const overlay = new Person();
+        overlay.setMap(gmap);
+        overlays.push(overlay);
+        return {
+          move(point) {
+            at = new maps.LatLng(point[0], point[1]);
+            overlay.draw();
+          },
+          position: () => [at.lat(), at.lng()],
+        };
+      },
+      onClick: (handler) => gmap.addListener('click', handler),
+      fit(points) {
+        const bounds = new maps.LatLngBounds();
+        for (const [lat, lng] of points) bounds.extend({ lat, lng });
+        gmap.fitBounds(bounds, 40);
+      },
+      line(path, color, weight, opacity = 1) {
+        new maps.Polyline({
+          map: gmap,
+          path: path.map(([lat, lng]) => ({ lat, lng })),
+          strokeColor: color,
+          strokeWeight: weight,
+          strokeOpacity: opacity,
+        });
+      },
+      dot(point, fill, label) {
+        new maps.Marker({
+          map: gmap,
+          position: { lat: point[0], lng: point[1] },
+          title: label,
+          icon: {
+            path: maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: fill,
+            fillOpacity: 1,
+            strokeColor: '#0f1720',
+            strokeWeight: 2,
+          },
+        });
+      },
+      remove() {
+        for (const overlay of overlays) overlay.setMap(null);
+        maps.event.clearInstanceListeners(gmap);
+      },
+    };
+  }
+
   /** Shows the household map with members' photos and two members driving. */
-  function liveMap() {
+  async function liveMap() {
     const old = app.querySelector('#household-map');
     const people = [];
     if (!old) return;
@@ -384,13 +584,14 @@
     holder.setAttribute('aria-label', 'Household location map');
     old.replaceWith(holder);
     app.querySelector('#load-tiles')?.setAttribute('hidden', '');
-    map = L.map(holder, { scrollWheelZoom: false });
-    tiles(map);
-    for (const place of D.places) {
-      L.circle([place.lat, place.lon], { radius: place.radius, color: MINT })
-        .addTo(map)
-        .bindPopup(place.name);
+    const shown = await demoMap(holder);
+    // Another screen may have opened while Google Maps was loading.
+    if (!holder.isConnected) {
+      shown.remove();
+      return;
     }
+    map = shown;
+    for (const place of D.places) map.circle(place);
     for (const html of S.map.markers) {
       const icon = element(html);
       const name = icon.dataset.memberName;
@@ -402,14 +603,7 @@
       const lines = [...icon.querySelectorAll('.member-map-popup p')];
       lines.slice(1).forEach((line) => line.remove());
       const tip = lines[0];
-      const marker = L.marker(start, {
-        icon: L.divIcon({
-          html: icon,
-          className: 'person-marker',
-          iconSize: [96, 70],
-          iconAnchor: [48, 52],
-        }),
-      }).addTo(map);
+      const marker = map.person(start, icon);
       icon.addEventListener('click', (event) => {
         event.stopPropagation();
         const open = !icon.classList.contains('is-open');
@@ -420,7 +614,7 @@
       });
       people.push({ name, icon, tip, marker, live, parked });
     }
-    map.on('click', () => {
+    map.onClick(() => {
       for (const p of people) p.icon.classList.remove('is-open');
       if (member) {
         member = null;
@@ -428,13 +622,7 @@
       }
     });
     const everyone = () =>
-      map.fitBounds(
-        L.latLngBounds([
-          ...people.map((p) => p.marker.getLatLng()),
-          ...D.places.map((p) => [p.lat, p.lon]),
-        ]),
-        { padding: [40, 40] },
-      );
+      map.fit([...people.map((p) => p.marker.position()), ...D.places.map((p) => [p.lat, p.lon])]);
     everyone();
     const status = app.querySelector('#map-status');
     const began = Date.now();
@@ -451,7 +639,7 @@
           continue;
         }
         const fraction = Math.min(1, elapsed / drive);
-        person.marker.setLatLng(along(person.live.path, fraction));
+        person.marker.move(along(person.live.path, fraction));
         const mph = Math.round(24 + 6 * Math.sin(elapsed / 4 + person.name.length));
         if (person.tip) {
           person.tip.textContent =
@@ -514,6 +702,7 @@
   /** Opens the trip dialog with the route on a map. */
   function openTrip(card, trip, title) {
     const dialog = document.createElement('dialog');
+    let route = null;
     dialog.className = 'trip-dialog';
     const close = document.createElement('button');
     close.textContent = 'Close';
@@ -530,34 +719,20 @@
     dialog.append(close, heading, large, facts, note);
     app.querySelector('#view').append(dialog);
     dialog.showModal();
-    const route = L.map(large, { scrollWheelZoom: false });
-    tiles(route);
-    L.polyline(trip.path, { color: '#0f1720', weight: 8, opacity: 0.9 }).addTo(route);
-    const line = L.polyline(trip.path, { color: '#a3e9bc', weight: 5 }).addTo(route);
-    L.circleMarker(trip.path[0], {
-      radius: 7,
-      color: '#0f1720',
-      weight: 2,
-      fillColor: '#7fb4ee',
-      fillOpacity: 1,
-    })
-      .addTo(route)
-      .bindTooltip(trip.origin);
-    L.circleMarker(trip.path[trip.path.length - 1], {
-      radius: 7,
-      color: '#0f1720',
-      weight: 2,
-      fillColor: '#e5b677',
-      fillOpacity: 1,
-    })
-      .addTo(route)
-      .bindTooltip(trip.destination);
-    setTimeout(() => {
-      route.invalidateSize();
-      route.fitBounds(line.getBounds(), { padding: [30, 30] });
-    }, 50);
+    demoMap(large).then((made) => {
+      route = made;
+      if (!dialog.open) {
+        route.remove();
+        return;
+      }
+      route.line(trip.path, '#0f1720', 8, 0.9);
+      route.line(trip.path, '#a3e9bc', 5);
+      route.dot(trip.path[0], '#7fb4ee', trip.origin);
+      route.dot(trip.path[trip.path.length - 1], '#e5b677', trip.destination);
+      setTimeout(() => route.fit(trip.path), 50);
+    });
     const done = () => {
-      route.remove();
+      route?.remove();
       dialog.remove();
       tell('trips', { member: trip.member });
     };
@@ -572,6 +747,7 @@
       !button ||
       button.closest('.trip-dialog') ||
       button.closest('.leaflet-container') ||
+      button.closest('#household-map, .trip-map') ||
       button.closest('#trip-filters')
     ) {
       return;
