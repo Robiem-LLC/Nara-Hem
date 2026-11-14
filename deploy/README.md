@@ -70,64 +70,38 @@ HTTPS in front of it (next section).
 
 ### Optional
 
-| Variable                                                  | Default                     | What it does                                                                                                                  |
-| --------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `NARAHEM_TAG`                                             | `latest`                    | Image channel: `latest` (releases) or `dev` (test builds).                                                                    |
-| `NARAHEM_DIR`                                             | `/opt/docker/narahem`       | Folder for the data (Portainer stack).                                                                                        |
-| `NARAHEM_PORT`                                            | `8186`                      | Port the server listens on.                                                                                                   |
-| `NARAHEM_GOOGLE_MAPS_API_KEY`                             | none: OpenStreetMap         | Google Maps browser key ([Google Maps](../docs/google-maps.md)).                                                              |
-| `NARAHEM_TEXTBELT_KEY`                                    | none                        | Textbelt key for text messages. You can also add it in **Admin settings**; this one wins.                                     |
-| `NARAHEM_ALLOW_ALEXA`                                     | `false`                     | `true` lets you link the Alexa skill ([Alexa](../docs/alexa.md)).                                                             |
-| `NARAHEM_ALERT_ADDRESSES`                                 | on                          | `0` stops street-address lookups for alerts and trips ("left an unsaved place").                                              |
-| `NARAHEM_STORAGE_QUOTA_MIB`                               | `512`                       | Most space encrypted records may use, in MiB.                                                                                 |
-| `NARAHEM_SETUP_TOKEN`                                     | generated                   | Your own first-run setup token (8–256 characters). Only used until setup is done.                                             |
-| `NARAHEM_PUSH_RELAY_URL`, `NARAHEM_FCM_RELAY_URL`         | built into official images  | Your own iPhone and Android push relays ([relays](cloudflare/README.md)).                                                     |
-| `NARAHEM_PUSH_RELAY_TOKEN`, `NARAHEM_FCM_RELAY_TOKEN`     | the server registers itself | Tokens for relays that issue them by hand.                                                                                    |
-| `NARAHEM_ALEXA_RELAY_URL`, `NARAHEM_ALEXA_STORE_SKILL_ID` | built into official images  | Your own Alexa relay and skill.                                                                                               |
-| `NARAHEM_IOS_APP_URL`, `NARAHEM_ANDROID_APP_URL`          | built into official images  | App download links in invitations; `none` leaves one out.                                                                     |
-| `NARAHEM_ALLOW_HTTP`                                      | `0`                         | `1` allows plain HTTP for testing on your own network only. Never for normal use.                                             |
-| `NARAHEM_REVIEW_CODE`, `NARAHEM_REVIEW_ACCOUNTS`          | none                        | App store review mode, for a separate demo server only ([`demo-stack.yaml`](demo-stack.yaml)). Never on a household's server. |
+| Variable                                         | Default                    | What it does                                                                              |
+| ------------------------------------------------ | -------------------------- | ----------------------------------------------------------------------------------------- |
+| `NARAHEM_TAG`                                    | `latest`                   | Image channel: `latest` (releases) or `dev` (test builds).                                |
+| `NARAHEM_DIR`                                    | `/opt/docker/narahem`      | Folder for the data (Portainer stack).                                                    |
+| `NARAHEM_PORT`                                   | `8186`                     | Port the server listens on.                                                               |
+| `NARAHEM_GOOGLE_MAPS_API_KEY`                    | none: OpenStreetMap        | Google Maps browser key ([Google Maps](../docs/google-maps.md)).                          |
+| `NARAHEM_TEXTBELT_KEY`                           | none                       | Textbelt key for text messages. You can also add it in **Admin settings**; this one wins. |
+| `NARAHEM_ALLOW_ALEXA`                            | `false`                    | `true` lets you link the Alexa skill ([Alexa](../docs/alexa.md)).                         |
+| `NARAHEM_ALERT_ADDRESSES`                        | on                         | `0` stops street-address lookups for alerts and trips ("left an unsaved place").          |
+| `NARAHEM_STORAGE_QUOTA_MIB`                      | `512`                      | Most space encrypted records may use, in MiB.                                             |
+| `NARAHEM_SETUP_TOKEN`                            | generated                  | Your own first-run setup token (8–256 characters). Only used until setup is done.         |
+| `NARAHEM_IOS_APP_URL`, `NARAHEM_ANDROID_APP_URL` | built into official images | If you build your own apps, point the invitation links to them; `none` leaves one out.    |
+| `NARAHEM_ALLOW_HTTP`                             | `0`                        | `1` allows plain HTTP for testing on your own network only. Never for normal use.         |
 
-Docker Compose also reads `NARAHEM_BIND_ADDRESS` (where the port listens), `NARAHEM_EXPORTS_PATH`
-(diagnostic reports folder), and, with the tunnel file, `NARAHEM_CLOUDFLARE_TUNNEL_TOKEN` and
-`NARAHEM_CLOUDFLARED_TAG`.
+Docker Compose also reads `NARAHEM_BIND_ADDRESS` (where the port listens) and
+`NARAHEM_EXPORTS_PATH` (the diagnostic reports folder).
 
 ## Reaching your server
 
-The apps and browsers need an HTTPS address that leads to port `8186`. Two easy ways:
+The apps and browsers need an HTTPS address that leads to port `8186` on your server. How you do
+that is up to you, and the steps depend on what you use; follow its own instructions. Two common,
+easy options:
 
-<details>
-<summary><strong>Cloudflare Tunnel</strong> (no open ports, hides your home IP)</summary>
+- **Cloudflare Tunnel:** no open ports on your router, and your home's IP stays hidden.
+- **A reverse proxy** such as Nginx Proxy Manager, with a free Let's Encrypt certificate.
 
-1. Add your domain to Cloudflare (the free plan is fine).
-2. **Zero Trust → Networks → Tunnels → Create a tunnel**, and route your hostname to the server:
-   `http://narahem:8080` if the connector runs in the same Docker network, otherwise
-   `http://<server-IP>:8186`.
-3. Run the connector. With Docker Compose, put the tunnel token in `.env` as
-   `NARAHEM_CLOUDFLARE_TUNNEL_TOKEN` and start with both files:
+Whichever you choose:
 
-   ```bash
-   docker compose -f compose.yaml -f compose.tunnel.yaml up -d
-   ```
-
-   In Portainer, run Cloudflare's connector as its own container with the token it shows you.
-
-4. Remove any old DNS record that points this hostname at your home's IP.
-
-</details>
-
-<details>
-<summary><strong>A reverse proxy</strong> such as Nginx Proxy Manager</summary>
-
-1. Point your domain's DNS at your home's IP and forward ports 80 and 443 to the proxy.
-2. Add a proxy host for your domain, forwarding to `http://<server-IP>:8186`, with a free Let's
-   Encrypt certificate and **Force SSL** on.
-3. Keep the original `Host` header (Nginx Proxy Manager does by default).
-
-</details>
-
-Whichever you use, `NARAHEM_PUBLIC_URL` must be exactly that HTTPS address; the server refuses
-requests for any other.
+- `NARAHEM_PUBLIC_URL` must be exactly that HTTPS address; the server refuses requests for any
+  other.
+- Keep the original `Host` header when forwarding.
+- Don't forward port `8186` itself to the internet.
 
 ## Updates
 

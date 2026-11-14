@@ -100,7 +100,6 @@ jobs:
           NARAHEM_IMAGE: ghcr.io/example/narahem
         run: |
           docker compose -f deploy/compose.yaml config --quiet
-          NARAHEM_CLOUDFLARE_TUNNEL_TOKEN=synthetic-ci-only-token docker compose -f deploy/compose.yaml -f deploy/compose.tunnel.yaml config --quiet
           docker compose -f deploy/portainer-stack.yaml config --quiet
       - name: Build image
         run: docker build --pull -t narahem:test .

@@ -35,11 +35,14 @@ docker compose exec -it narahem python manage.py reset-owner-password
 This signs the administrator out everywhere. A member who forgot theirs: **Manage household →
 Send password reset**.
 
-## Every trusted device is lost
+## Your trusted browser is lost
 
-Approve a new phone or browser from any device that's still trusted. If none is left, start a new
-household identity. This deletes all shared locations, trips, places and devices, and can't be
-undone; accounts and email settings stay:
+Phones never need this: a member just signs in again on the app with their email or text code. A
+new **browser** is approved from another trusted browser (**Manage household → Device access**).
+
+If no trusted browser is left, start a new household identity. This deletes every shared location,
+trip, place and profile photo, and every phone and browser has to join again. Accounts and email
+settings stay. It can't be undone:
 
 ```bash
 docker compose exec -it narahem python manage.py reset-encryption

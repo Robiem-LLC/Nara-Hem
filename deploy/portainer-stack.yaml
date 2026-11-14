@@ -14,10 +14,6 @@ services:
       NARAHEM_GOOGLE_MAPS_API_KEY: ${NARAHEM_GOOGLE_MAPS_API_KEY:-} #optional: your own browser key; blank = OpenStreetMap
       NARAHEM_TEXTBELT_KEY: ${NARAHEM_TEXTBELT_KEY:-} #optional: Textbelt key for text messages; overrides Admin settings
       NARAHEM_ALLOW_ALEXA: ${NARAHEM_ALLOW_ALEXA:-false} #optional: true lets you link an Alexa skill (docs/alexa.md)
-      NARAHEM_PUSH_RELAY_URL: ${NARAHEM_PUSH_RELAY_URL:-} #optional: blank = official image's built-in iPhone relay address
-      NARAHEM_PUSH_RELAY_TOKEN: ${NARAHEM_PUSH_RELAY_TOKEN:-} #optional: blank = register with the relay automatically
-      NARAHEM_FCM_RELAY_URL: ${NARAHEM_FCM_RELAY_URL:-} #optional: blank = official image's built-in Android relay address
-      NARAHEM_FCM_RELAY_TOKEN: ${NARAHEM_FCM_RELAY_TOKEN:-} #optional: blank = register with the relay automatically
     volumes:
       - ${NARAHEM_DIR:-/opt/docker/narahem}/server-data:/data #optional base folder: keys, keep private
       - ${NARAHEM_DIR:-/opt/docker/narahem}/exports:/exports # readable redacted reports, safe to share

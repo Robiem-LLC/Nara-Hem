@@ -8,9 +8,13 @@ in; this key is only for your server's web app.
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a project (or pick one)
    and turn on billing. Google gives a free monthly allowance; a household stays well inside it.
-2. **APIs & Services → Library**: enable **Maps JavaScript API** and **Geocoding API**. Optionally
-   also **Maps Static API**, for Google map thumbnails on trip cards (otherwise they use
-   OpenStreetMap).
+2. **APIs & Services → Library**: enable
+   - **Maps JavaScript API**, for the maps themselves: the household map, trip routes and the
+     place editor;
+   - **Geocoding API**, for address search when adding a place, and street names for trips and
+     stops;
+   - **Maps Static API**, for the small map thumbnails on trip cards (without it, those use
+     OpenStreetMap).
 3. **APIs & Services → Credentials → Create credentials → API key**, then edit the key:
    - **Application restrictions → Websites**: add your server's address followed by `/*`, e.g.
      `https://family.example.com/*`.

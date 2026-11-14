@@ -4,15 +4,15 @@ Every household runs its own server, but Apple, Google and Amazon each want one 
 talk to. These three small Cloudflare Workers are that service. They pass messages along and
 keep nothing about households: no locations, names, addresses or message text ever reach them.
 
-Official server images have the relays' addresses built in at build time (from CI secrets, see
-`ci/relay_defaults.py`), so nothing here names them. To run your own, deploy these Workers and
-point your server at them with the environment variables below.
+Official server images have the relays' addresses built in when they're built, so nothing here
+names them. To run your own, deploy these Workers; the settings a server reads are listed in
+`apps/webapp/backend/narahem/image_defaults.py`.
 
-| Worker                                             | For                   | Server setting            |
-| -------------------------------------------------- | --------------------- | ------------------------- |
-| [`apns-relay-worker.mjs`](apns-relay-worker.mjs)   | iPhone push (APNs)    | `NARAHEM_PUSH_RELAY_URL`  |
-| [`fcm-relay-worker.mjs`](fcm-relay-worker.mjs)     | Android push (FCM)    | `NARAHEM_FCM_RELAY_URL`   |
-| [`alexa-relay-worker.mjs`](alexa-relay-worker.mjs) | The Alexa store skill | `NARAHEM_ALEXA_RELAY_URL` |
+| Worker                                             | For                   |
+| -------------------------------------------------- | --------------------- |
+| [`apns-relay-worker.mjs`](apns-relay-worker.mjs)   | iPhone push (APNs)    |
+| [`fcm-relay-worker.mjs`](fcm-relay-worker.mjs)     | Android push (FCM)    |
+| [`alexa-relay-worker.mjs`](alexa-relay-worker.mjs) | The Alexa store skill |
 
 Each is a module Worker: **Workers & Pages → Create → Worker**, paste the file, **Deploy**, then
 add the secrets below under **Settings → Variables and Secrets**. `GET /health` shows the
@@ -20,12 +20,12 @@ deployed `workerRevision`.
 
 ## Push relays (iPhone and Android)
 
-The server never sends the push providers anything readable. When something happens (a new
-location, a household alert, a ring), it asks the relay to send one of a few fixed kinds of push
-to a device token; the phone then fetches and decrypts the real data from its own server.
+The server never sends the push providers anything personal. When a phone needs to show something
+(a household alert or a Find My Phone ring), the server asks the relay to send one of a few fixed
+pushes to that phone's token; the phone then fetches the details from its own server over HTTPS.
 
 - `update`: a generic "something changed" notification.
-- `alert`: a placeholder the phone replaces with the decrypted household alert ("Sam left
+- `alert`: a placeholder the phone replaces with the household alert it fetches ("Sam left
   Home") before it's shown: on iPhone through the notification service extension
   (`mutable-content`), on Android as a data-only message the app shows itself. Expires after 15
   minutes.
@@ -91,14 +91,6 @@ Echo → Amazon → forwarder (Alexa-hosted, inside Amazon) → this relay → t
 Secrets: `CLIENT_SECRET` (also entered in the skill's account linking), `SEAL_KEY` (long random
 text; changing it unlinks every household) and `FORWARD_SECRET` (also pasted into the forwarder).
 Variable: `CLIENT_ID` (default `nara-hem`).
-
-To make the skill: create an **Alexa-hosted (Node.js)** custom skill, paste
-[`../alexa/interaction-model.json`](../alexa/interaction-model.json) into the JSON Editor, replace
-`lambda/index.js` with the forwarder (filling in the relay's address and `FORWARD_SECRET`), and
-turn on account linking (**Auth Code Grant**, Web Authorization URI `https://<relay>/link`,
-Access Token URI `https://<relay>/token`, client ID `nara-hem`, scope `household`, HTTP Basic).
-Servers then need `NARAHEM_ALEXA_RELAY_URL` and the skill's ID in
-`NARAHEM_ALEXA_STORE_SKILL_ID`.
 
 ## Tests
 

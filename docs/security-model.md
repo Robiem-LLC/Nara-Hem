@@ -16,7 +16,7 @@ What this means:
 - **A database dump or backup alone does not reveal coordinates.** Records are stored encrypted with keys kept on the data volume, not in the database. Back the volume up separately and keep it private.
 - **Third parties see less:**
   - For somewhere that is not a saved place, the server sends that one coordinate to Google's Geocoding API (if the server's Maps key allows it) or to OpenStreetMap Nominatim, to get a street address for the alert or for a trip's start or end (once per trip). Set `NARAHEM_ALERT_ADDRESSES=0` to turn this off.
-  - Apple and Google push services carry only a few fixed messages ("A household update is available", "Household alert", the Find My Phone ring) and see when each phone is woken. They never get names, places, alert text or locations: the phone fetches those from your server and decrypts them itself.
+  - Apple and Google push services carry only a few fixed messages ("A household update is available", "Household alert", the Find My Phone ring) and see when each phone is woken. They never get names, places, alert text or locations: the phone fetches those from your server over HTTPS.
   - Map tile providers see the regions viewed in the apps and the web app.
 - **The server enforces who sees what.** It only shows a member's location, trips and alerts to the accounts that member's phone shares with, and only trips from the day each account joined.
 
