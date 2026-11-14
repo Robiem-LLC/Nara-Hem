@@ -107,3 +107,8 @@ node --test 'deploy/cloudflare/tests/*.test.mjs'
 ```
 
 They run each Worker against fake Apple, Google and household servers; nothing is sent for real.
+
+## Credits
+
+The idea of relaying Apple push notifications for self-hosted servers through a Cloudflare Worker
+comes from [Paje](https://github.com/jonesphillip/paje) by Phillip Jones (Apache-2.0).

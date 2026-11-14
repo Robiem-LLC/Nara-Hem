@@ -20,19 +20,14 @@ browsers only get household data once they've been approved.
   has the download links.
 - **Alexa:** [docs/alexa.md](docs/alexa.md).
 
-## Verify a download
-
-Commits and release tags are signed by Robiem (GitHub shows them as **Verified**). Android
-releases are signed with Robiem's release key, whose certificate fingerprint is in
-[`apps/android/release-certificate.txt`](apps/android/release-certificate.txt). Compare it with:
-
-```bash
-apksigner verify --print-certs NaraHem-Android-X.Y.Z.apk
-```
-
 ## Security
 
 See [SECURITY.md](SECURITY.md).
+
+## Credits
+
+- The iPhone push relay was inspired by [Paje](https://github.com/jonesphillip/paje) by Phillip
+  Jones: self-hosted iOS push notifications on Cloudflare Workers.
 
 ## License
 
