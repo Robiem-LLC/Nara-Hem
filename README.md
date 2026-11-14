@@ -28,6 +28,8 @@ See [SECURITY.md](SECURITY.md).
 
 - The iPhone push relay was inspired by [Paje](https://github.com/jonesphillip/paje) by Phillip
   Jones: self-hosted iOS push notifications on Cloudflare Workers.
+- Ideas for battery-friendly location tracking came from
+  [Traccar](https://github.com/traccar/traccar), the open-source GPS tracking system.
 
 ## License
 
