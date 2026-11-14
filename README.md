@@ -15,7 +15,8 @@ browsers only get household data once they've been approved.
 
 ## Install
 
-- **Server:** [deploy/README.md](deploy/README.md). One Docker stack is one household.
+- **Server:** [install](deploy/README.md), then [first-time setup](docs/setup.md). One Docker
+  stack is one household. Stuck? See [troubleshooting](docs/troubleshooting.md).
 - **Apps:** sign in with your server's address and your account; your server's invitation email
   has the download links.
 - **Alexa:** [docs/alexa.md](docs/alexa.md).
