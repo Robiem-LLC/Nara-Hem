@@ -100,13 +100,13 @@ jobs:
           # dev builds are labeled so they are never mistaken for a main build.
           channel=$([[ "$GITHUB_REF_NAME" == main ]] || echo "-$GITHUB_REF_NAME")
           cp apps/android/app/build/outputs/apk/google/debug/app-google-debug.apk "apps/android/app/build/outputs/apk/google/debug/NaraHem-Android${channel}-$(date -u '+%Y%m%d-%H%M')-build$((GITHUB_RUN_NUMBER + 1000)).apk"
-      - name: Make room for build files (oldest deleted first)
+      - name: Keep only the newest build files (oldest deleted first)
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          BUDGET_MB: ${{ vars.NARAHEM_ARTIFACT_BUDGET_MB || '250' }}
-        run: python3 ci/artifact_budget.py --budget-mb "$BUDGET_MB" --reserve 'apps/android/app/build/outputs/apk/google/debug/NaraHem-Android-*.apk'
+          KEEP: ${{ vars.NARAHEM_ARTIFACT_KEEP || '5' }}
+        run: python3 ci/keep_artifacts.py --keep "$KEEP" 'NaraHem-Android-*'
       - name: Upload installable Google Maps debug APK
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         # GitHub's artifact storage can fill up; the share copy below doesn't need it.

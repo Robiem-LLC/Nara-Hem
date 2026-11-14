@@ -174,13 +174,13 @@ jobs:
         run: |
           adb emu kill 2>/dev/null || true
           [ -n "${SHOWCASE_SIMULATOR:-}" ] && xcrun simctl shutdown "$SHOWCASE_SIMULATOR" 2>/dev/null || true
-      - name: Make room for build files (oldest deleted first)
+      - name: Keep only the newest build files (oldest deleted first)
         if: always()
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          BUDGET_MB: ${{ vars.NARAHEM_ARTIFACT_BUDGET_MB || '250' }}
-        run: python3 ci/artifact_budget.py --budget-mb "$BUDGET_MB" --reserve "$RUNNER_TEMP/phones"
+          KEEP: ${{ vars.NARAHEM_ARTIFACT_KEEP || '5' }}
+        run: python3 ci/keep_artifacts.py --keep "$KEEP" showcase-phones
       - name: Upload the phone recordings
         if: always()
         # When GitHub's artifact storage is full, the site keeps the phone videos it already has.
@@ -292,12 +292,12 @@ jobs:
           docker logout ghcr.io >/dev/null 2>&1 || true
           python3 site/build.py "$RUNNER_TEMP/media" "$RUNNER_TEMP/site" > "$RUNNER_TEMP/build.log" 2>&1 || report 'Building the site failed'
           du -sh "$RUNNER_TEMP/site" >> "$GITHUB_STEP_SUMMARY"
-      - name: Make room for build files (oldest deleted first)
+      - name: Keep only the newest build files (oldest deleted first)
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          BUDGET_MB: ${{ vars.NARAHEM_ARTIFACT_BUDGET_MB || '250' }}
-        run: python3 ci/artifact_budget.py --budget-mb "$BUDGET_MB" --reserve "$RUNNER_TEMP/site" "$RUNNER_TEMP/recording"
+          KEEP: ${{ vars.NARAHEM_ARTIFACT_KEEP || '5' }}
+        run: python3 ci/keep_artifacts.py --keep "$KEEP" showcase-site showcase-recording
       - name: Upload the site
         # A copy to download; the published image doesn't depend on it.
         continue-on-error: true
