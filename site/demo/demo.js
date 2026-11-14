@@ -382,7 +382,13 @@
   function loadGoogle() {
     if (!GOOGLE_KEY || googleFailed) return Promise.reject(new Error('No Google Maps'));
     googleLoad ??= new Promise((resolve, reject) => {
-      window.naraHemDemoGoogle = () => resolve(window.google.maps);
+      // With loading=async, Google sets up its map classes only once they're imported.
+      window.naraHemDemoGoogle = () => {
+        const maps = window.google.maps;
+        Promise.all([maps.importLibrary('maps'), maps.importLibrary('marker')])
+          .then(() => resolve(maps))
+          .catch(reject);
+      };
       // A refused key shows up only after the map is made: go back to OpenStreetMap.
       window.gm_authFailure = () => {
         googleFailed = true;
