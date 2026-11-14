@@ -19,7 +19,6 @@ What this means:
   - Apple and Google push services carry only a few fixed messages ("A household update is available", "Household alert", the Find My Phone ring) and see when each phone is woken. They never get names, places, alert text or locations: the phone fetches those from your server and decrypts them itself.
   - Map tile providers see the regions viewed in the apps and the web app.
 - **The server enforces who sees what.** It only shows a member's location, trips and alerts to the accounts that member's phone shares with, and only trips from the day each account joined.
-- **Records are still signed and encrypted for each approved device.** That gives sender authentication, tamper and replay protection, and device approval. It no longer keeps data from the server.
 
 ## What protects your data
 
@@ -30,10 +29,3 @@ What this means:
 - **Removing someone:** revoking or deleting a member stops their sessions and devices straight
   away. What they already saw can't be taken back.
 - **Sign-in:** email or text codes only prove who you are; they never hand out household keys.
-
-## Limits
-
-- Anyone who can see a member's location in the app can also record it.
-- The server sees ordinary metadata even for encrypted data: IP addresses, emails, device IDs,
-  timing and sizes.
-- Nära Hem has not had an independent security audit.
