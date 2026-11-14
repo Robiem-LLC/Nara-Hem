@@ -173,6 +173,8 @@ jobs:
           [ -n "${SHOWCASE_SIMULATOR:-}" ] && xcrun simctl shutdown "$SHOWCASE_SIMULATOR" 2>/dev/null || true
       - name: Upload the phone recordings
         if: always()
+        # When GitHub's artifact storage is full, the site keeps the phone videos it already has.
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: showcase-phones

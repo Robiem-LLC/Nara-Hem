@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       release:
-        description: 'Release version to sign and publish, e.g. 1.0.0 (main only; needs the signed tag v1.0.0 on this commit). Leave empty for a normal build.'
+        description: 'Release version to sign and publish, e.g. 1.0.0 (main only; needs the signed tag v1.0.0 on main). Leave empty for a normal build.'
         type: string
         default: ''
 permissions:
@@ -138,7 +138,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check the release tag is signed by Robiem and on this commit
+      - name: Check the release tag is signed by Robiem and on main, then use its commit
         run: |
           set -euo pipefail
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?$ ]] || {
@@ -146,12 +146,15 @@ jobs:
             exit 1
           }
           tag="v$VERSION"
-          [[ "$(git rev-parse "refs/tags/$tag^{commit}")" == "$GITHUB_SHA" ]] || {
-            echo "Tag $tag must be on the commit main is at ($GITHUB_SHA)." >&2
+          git merge-base --is-ancestor "refs/tags/$tag" "$GITHUB_SHA" || {
+            echo "Tag $tag must be on a commit in main's history." >&2
             exit 1
           }
-          # Only keys listed in .github/allowed_signers (Robiem's) are accepted.
+          # Only keys listed in main's .github/allowed_signers (Robiem's) are accepted.
           git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-tag "$tag"
+          # Build exactly the tagged commit, even if main has moved on since.
+          git checkout --quiet --detach "refs/tags/$tag"
+          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Verify local Android toolchain
         run: |
           set -euo pipefail
@@ -179,7 +182,7 @@ jobs:
         env:
           NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY }}
           NARAHEM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.NARAHEM_ANDROID_KEYSTORE_PASSWORD }}
-          NARAHEM_BUILD_COMMIT: ${{ github.sha }}
+          NARAHEM_BUILD_COMMIT: ${{ env.RELEASE_COMMIT }}
         run: |
           NARAHEM_ANDROID_KEYSTORE="$RUNNER_TEMP/narahem-release.p12" NARAHEM_VERSION="$VERSION" \
             bash gradlew :app:assembleGoogleRelease :app:bundleGoogleRelease --no-daemon
