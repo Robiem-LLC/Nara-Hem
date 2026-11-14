@@ -1,0 +1,50 @@
+name: Android tests
+
+# Compile and unit-test Android changes before they reach main.
+# Runs on the self-hosted Linux runner inside a pinned Android SDK image on its isolated
+# DinD daemon; never on the Mac, and never for pull requests from forks.
+on:
+  pull_request:
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android-tests.yaml'
+  push:
+    branches: [dev]
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android-tests.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  unit-tests:
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Synthetic Firebase config (unit tests never contact Firebase)
+        run: cp apps/android/ci/google-services.synthetic.json apps/android/app/google-services.json
+      - name: Kotlin style and unit tests (OpenStreetMap flavor, no API keys)
+        shell: bash
+        # Without a Maps key only the osm flavor is enabled; no secrets are used. The image
+        # runs as root so it can write the checkout; ownership is handed back afterwards so
+        # the next checkout can clean it. The Gradle cache persists in a DinD volume.
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE/apps/android" \
+            -v narahem-android-gradle:/gradle -e GRADLE_USER_HOME=/gradle \
+            -e OWNER="$(id -u):$(id -g)" -e CHECKOUT="$GITHUB_WORKSPACE" \
+            cimg/android:2026.10.1@sha256:4e5677b17e50ea9b478f9b88071cf58dbd751ae4d62f296c676dd47e99a88e4b \
+            bash -c 'status=0; bash gradlew :app:ktlintCheck :app:testOsmDebugUnitTest --no-daemon || status=$?; chown -R "$OWNER" "$CHECKOUT"; exit $status'

@@ -1,0 +1,225 @@
+name: Android
+on:
+  push:
+    branches: [main, dev]
+    paths: ['apps/android/**', '.github/workflows/android.yaml']
+  workflow_dispatch:
+    inputs:
+      validation:
+        description: 'Also run unit tests and lint (slower)'
+        type: boolean
+        default: false
+      release:
+        description: 'Release version to sign and publish, e.g. 1.0.0 (main only; needs the signed tag v1.0.0 on this commit). Leave empty for a normal build.'
+        type: string
+        default: ''
+permissions:
+  contents: read
+# Dedicated Mac runner; only owner-merged main/dev builds. PR code never runs here.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    # Trusted main/dev commits and manually requested full validations all produce APKs.
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      !inputs.release
+    runs-on: [self-hosted, macOS, ARM64, narahem-ios]
+    timeout-minutes: 40
+    env:
+      JAVA_HOME: /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+      ANDROID_HOME: /Users/narahemci/Library/Android/sdk
+      GOOGLE_KEY_CONFIGURED: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify local Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME/bin/java" || { echo 'Homebrew Java 17 is not accessible to narahemci'; exit 1; }
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          "$JAVA_HOME/bin/java" -version
+          test -d "$ANDROID_HOME/platforms/android-36" || { echo 'Android SDK API 36 is not installed for narahemci'; exit 1; }
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner" || { echo 'Android Build Tools 35.0.0 are missing'; exit 1; }
+      - name: Verify neutral Android package namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'namespace = "com.robiem.narahem"' apps/android/app/build.gradle.kts
+          grep -Fq 'applicationId = "com.robiem.narahem"' apps/android/app/build.gradle.kts
+          find apps/android/app/src -name '*.kt' -type f | while IFS= read -r file; do
+            grep -Eq '^package com[.]robiem[.]narahem([.]|$)' "$file" || {
+              echo "Unexpected Kotlin package declaration: $file" >&2
+              exit 1
+            }
+          done
+      - name: Require configured Google Maps key for downloadable builds
+        if: env.GOOGLE_KEY_CONFIGURED != 'true'
+        run: |
+          echo 'Set repository secret NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY before publishing an installable APK.' >&2
+          exit 1
+      - name: Write Firebase config
+        env:
+          NARAHEM_GOOGLE_SERVICES_JSON: ${{ secrets.NARAHEM_GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NARAHEM_GOOGLE_SERVICES_JSON" ]]; then
+            echo 'Set repository secret NARAHEM_GOOGLE_SERVICES_JSON to the google-services.json for com.robiem.narahem.' >&2
+            exit 1
+          fi
+          printf '%s' "$NARAHEM_GOOGLE_SERVICES_JSON" > apps/android/app/google-services.json
+      - name: Stamp UTC build time
+        run: echo "NARAHEM_BUILD_UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+      - name: Compile Google Maps APK (optional unit tests and lint)
+        working-directory: apps/android
+        env:
+          NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY || 'synthetic-ci-key-not-for-device-use' }}
+          NARAHEM_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          tasks=(:app:assembleGoogleDebug)
+          if [[ "${{ inputs.validation }}" == true ]]; then
+            tasks+=(:app:testGoogleDebugUnitTest :app:lintGoogleDebug)
+          fi
+          bash gradlew "${tasks[@]}" --no-daemon
+      - name: Print Google APK signing SHA-1
+        if: env.GOOGLE_KEY_CONFIGURED == 'true'
+        run: |
+          # Read the signing identity from the actual APK, not a runner-specific keystore path.
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs \
+            apps/android/app/build/outputs/apk/google/debug/app-google-debug.apk \
+            | grep -i 'Signer #1 certificate SHA-1 digest:'
+      - name: Create dated debug APK
+        if: env.GOOGLE_KEY_CONFIGURED == 'true'
+        run: |
+          # dev builds are labeled so they are never mistaken for a main build.
+          channel=$([[ "$GITHUB_REF_NAME" == main ]] || echo "-$GITHUB_REF_NAME")
+          cp apps/android/app/build/outputs/apk/google/debug/app-google-debug.apk "apps/android/app/build/outputs/apk/google/debug/NaraHem-Android${channel}-$(date -u '+%Y%m%d-%H%M')-build$((GITHUB_RUN_NUMBER + 1000)).apk"
+      - name: Upload installable Google Maps debug APK
+        if: env.GOOGLE_KEY_CONFIGURED == 'true'
+        # GitHub's artifact storage can fill up; the share copy below doesn't need it.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: NaraHem-Android-${{ github.run_number }}-${{ github.sha }}
+          path: apps/android/app/build/outputs/apk/google/debug/NaraHem-Android-*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Deliver APK to Mac share
+        # Straight from this Mac, like the iPhone build, so it never needs the artifact.
+        if: env.GOOGLE_KEY_CONFIGURED == 'true' && vars.NARAHEM_LOCAL_PUBLISH_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/android-publish-$GITHUB_RUN_ID"
+          rm -rf "$source" && mkdir -p "$source"
+          cp apps/android/app/build/outputs/apk/google/debug/NaraHem-Android-*.apk "$source/"
+          python3 ci/publish/publish.py --platform android --source "$source" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --commit "$GITHUB_SHA" \
+            --channel "$GITHUB_REF_NAME"
+  release:
+    # Started by hand on main with a version: builds the Google Maps APK and the Play Store bundle,
+    # signs both with Robiem's release key and publishes them as the GitHub Release for the tag.
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
+      github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' &&
+      inputs.release != ''
+    runs-on: [self-hosted, macOS, ARM64, narahem-ios]
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      JAVA_HOME: /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+      ANDROID_HOME: /Users/narahemci/Library/Android/sdk
+      VERSION: ${{ inputs.release }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the release tag is signed by Robiem and on this commit
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?$ ]] || {
+            echo 'Release version must look like 1.0.0 or 1.0.0-beta.1' >&2
+            exit 1
+          }
+          tag="v$VERSION"
+          [[ "$(git rev-parse "refs/tags/$tag^{commit}")" == "$GITHUB_SHA" ]] || {
+            echo "Tag $tag must be on the commit main is at ($GITHUB_SHA)." >&2
+            exit 1
+          }
+          # Only keys listed in .github/allowed_signers (Robiem's) are accepted.
+          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-tag "$tag"
+      - name: Verify local Android toolchain
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME/bin/java" || { echo 'Homebrew Java 17 is not accessible to narahemci'; exit 1; }
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          test -d "$ANDROID_HOME/platforms/android-36" || { echo 'Android SDK API 36 is not installed for narahemci'; exit 1; }
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner" || { echo 'Android Build Tools 35.0.0 are missing'; exit 1; }
+      - name: Write Firebase config and release key
+        env:
+          NARAHEM_GOOGLE_SERVICES_JSON: ${{ secrets.NARAHEM_GOOGLE_SERVICES_JSON }}
+          NARAHEM_ANDROID_KEYSTORE_BASE64: ${{ secrets.NARAHEM_ANDROID_KEYSTORE_BASE64 }}
+          GOOGLE_KEY_CONFIGURED: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY != '' }}
+        run: |
+          set -euo pipefail
+          for name in NARAHEM_GOOGLE_SERVICES_JSON NARAHEM_ANDROID_KEYSTORE_BASE64; do
+            [[ -n "${!name}" ]] || { echo "Set repository secret $name before releasing." >&2; exit 1; }
+          done
+          [[ "$GOOGLE_KEY_CONFIGURED" == true ]] || { echo 'Set NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY before releasing.' >&2; exit 1; }
+          printf '%s' "$NARAHEM_GOOGLE_SERVICES_JSON" > apps/android/app/google-services.json
+          umask 077
+          printf '%s' "$NARAHEM_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/narahem-release.p12"
+          echo "NARAHEM_BUILD_UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+      - name: Build and sign the release APK and Play Store bundle
+        working-directory: apps/android
+        env:
+          NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY }}
+          NARAHEM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.NARAHEM_ANDROID_KEYSTORE_PASSWORD }}
+          NARAHEM_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          NARAHEM_ANDROID_KEYSTORE="$RUNNER_TEMP/narahem-release.p12" NARAHEM_VERSION="$VERSION" \
+            bash gradlew :app:assembleGoogleRelease :app:bundleGoogleRelease --no-daemon
+      - name: Remove the release key from this Mac
+        if: always()
+        run: rm -f "$RUNNER_TEMP/narahem-release.p12"
+      - name: Check both are signed with Robiem's release key
+        run: |
+          set -euo pipefail
+          apk=apps/android/app/build/outputs/apk/google/release/app-google-release.apk
+          aab=apps/android/app/build/outputs/bundle/googleRelease/app-google-release.aab
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          normal() { tr -d ': \n' | tr 'A-F' 'a-f'; }
+          expected=$(grep -oE '([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}' apps/android/release-certificate.txt | head -1 | normal || true)
+          certs=$("$tools/apksigner" verify --print-certs "$apk")
+          apk_sha=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "$certs" | normal)
+          "$JAVA_HOME/bin/jarsigner" -verify "$aab" | grep -q 'jar verified'
+          aab_sha=$("$JAVA_HOME/bin/keytool" -printcert -jarfile "$aab" | sed -n 's/^.*SHA256: //p' | head -1 | normal)
+          echo "APK certificate SHA-256: $apk_sha"
+          echo "AAB certificate SHA-256: $aab_sha"
+          [[ "$(grep -c '^Signer #[0-9]* certificate DN:' <<< "$certs")" == 1 ]] || { echo 'APK has more than one signer' >&2; exit 1; }
+          [[ -n "$expected" && "$apk_sha" == "$expected" && "$aab_sha" == "$expected" ]] || {
+            echo 'Not signed with the release key in apps/android/release-certificate.txt.' >&2
+            exit 1
+          }
+          "$tools/aapt2" dump badging "$apk" | grep -q "versionName='$VERSION'" || {
+            echo "APK version is not $VERSION" >&2
+            exit 1
+          }
+      - name: Publish the GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/release-$GITHUB_RUN_ID"
+          rm -rf "$dist" && mkdir -p "$dist"
+          cp apps/android/app/build/outputs/apk/google/release/app-google-release.apk "$dist/NaraHem-Android-$VERSION.apk"
+          cp apps/android/app/build/outputs/bundle/googleRelease/app-google-release.aab "$dist/NaraHem-Android-$VERSION.aab"
+          # The same APK under a fixed name, so .../releases/latest/download/NaraHem-Android.apk
+          # always gets the newest release (invitations and the website link to it).
+          cp "$dist/NaraHem-Android-$VERSION.apk" "$dist/NaraHem-Android.apk"
+          (cd "$dist" && shasum -a 256 NaraHem-Android-* > SHA256SUMS && cat SHA256SUMS)
+          python3 ci/github_release.py --version "$VERSION" --dir "$dist"

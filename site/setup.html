@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Set up {{name}}</title>
+    <meta
+      name="description"
+      content="Run your own {{name}} server and connect your family's phones, step by step."
+    />
+    <meta name="theme-color" content="#0b1019" />
+    <link rel="icon" href="icon-64.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="index.html"
+        ><img src="icon-256.png" alt="" width="36" height="36" />{{name}}</a
+      >
+      <nav><a href="index.html">Demo</a><a href="{{github}}" class="button small">GitHub</a></nav>
+    </header>
+    <main>
+      <article class="policy setup">
+        <p class="eyebrow">Setup guide</p>
+        <h1>Run {{name}} for your household</h1>
+        <p class="lead">
+          About 30 minutes, once. You'll start the server, give it a secure web address, create your
+          household, then connect everyone's phones.
+        </p>
+
+        <nav class="toc" aria-label="Steps">
+          <ol>
+            <li><a href="#need">What you need</a></li>
+            <li><a href="#server">Start the server</a></li>
+            <li><a href="#https">Give it a secure address</a></li>
+            <li><a href="#household">Create your household</a></li>
+            <li><a href="#email">Connect email</a></li>
+            <li><a href="#browser">Trust your browser</a></li>
+            <li><a href="#family">Invite your family</a></li>
+            <li><a href="#phones">Connect the phones</a></li>
+          </ol>
+        </nav>
+
+        <section id="need">
+          <h2><span class="step">1</span>What you need</h2>
+          <ul>
+            <li>
+              <strong>A computer that stays on</strong> with Docker and an Intel or AMD (x86-64)
+              processor: a Linux box, a NAS such as Unraid, TrueNAS or an Intel-based Synology, or
+              Windows with Docker Desktop. The server image isn't built for ARM boards such as the
+              Raspberry Pi yet. <a href="https://www.portainer.io/">Portainer</a> makes it
+              point-and-click, but plain Docker Compose works too.
+            </li>
+            <li>
+              <strong>A domain on Cloudflare</strong> (the free plan is fine) for a secure HTTPS
+              address without opening ports on your router. Any other HTTPS reverse proxy also
+              works.
+            </li>
+            <li>
+              <strong>An email account that can send mail by SMTP</strong>, such as your email
+              provider's SMTP server with an app password. {{name}} emails invitations and the codes
+              that register each phone.
+            </li>
+          </ul>
+        </section>
+
+        <section id="server">
+          <h2><span class="step">2</span>Start the server</h2>
+          <p>
+            The server is two containers: {{name}} and its PostgreSQL database.
+            <a href="narahem-stack.yaml" download>Download the stack file</a>, or copy it from
+            below.
+          </p>
+          <ol>
+            <li>
+              In Portainer, open <strong>Stacks → Add stack → Web editor</strong> and paste the
+              stack file.
+            </li>
+            <li>
+              Under <strong>Environment variables</strong>, add:
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>NARAHEM_IMAGE</code></td>
+                    <td><code>{{image}}</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>NARAHEM_PUBLIC_URL</code></td>
+                    <td>
+                      The exact address you'll use in step 3, such as
+                      <code>https://family.example.com</code>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>NARAHEM_DB_PASSWORD</code></td>
+                    <td>A long random password. Never change it after the first start.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </li>
+            <li>
+              Click <strong>Deploy the stack</strong>. Your data is kept in
+              <code>/opt/docker/narahem</code> on that computer (set <code>NARAHEM_DIR</code> to use
+              another folder).
+            </li>
+          </ol>
+          <p>
+            The server listens on port <code>8186</code> with plain HTTP, so don't forward that port
+            on your router. Step 3 adds HTTPS in front of it.
+          </p>
+          <details>
+            <summary>Show the stack file</summary>
+            <pre><code>{{stack_yaml}}</code></pre>
+          </details>
+          <details>
+            <summary>Using Docker Compose instead of Portainer</summary>
+            <p>
+              Save the stack file as <code>compose.yaml</code> in a new folder, create a
+              <code>.env</code> file beside it with the three variables above (one
+              <code>NAME=value</code> per line), then run <code>docker compose up -d</code>.
+            </p>
+          </details>
+        </section>
+
+        <section id="https">
+          <h2><span class="step">3</span>Give it a secure address</h2>
+          <p>
+            The phone apps only connect over HTTPS. A Cloudflare Tunnel gives you that without
+            opening any ports or revealing your home IP address.
+          </p>
+          <ol>
+            <li>
+              In the Cloudflare dashboard, open <strong>Zero Trust → Networks → Tunnels</strong> and
+              create a tunnel. Cloudflare shows a command to install its connector; run it on the
+              same computer (the Docker option works well in Portainer too).
+            </li>
+            <li>
+              Add a <strong>public hostname</strong> to the tunnel, such as
+              <code>family.example.com</code>. Set the service to <strong>HTTP</strong> and the URL
+              to <code>localhost:8186</code>, or <code>&lt;that computer's IP&gt;:8186</code> if the
+              connector runs in Docker.
+            </li>
+            <li>
+              Make sure the hostname exactly matches <code>NARAHEM_PUBLIC_URL</code>. If it doesn't,
+              update the variable and redeploy the stack.
+            </li>
+          </ol>
+        </section>
+
+        <section id="household">
+          <h2><span class="step">4</span>Create your household</h2>
+          <ol>
+            <li>
+              Open your address in a browser. You'll see <strong>Make this server yours.</strong>
+            </li>
+            <li>
+              Find the one-time setup token: in Portainer, open the stack's
+              <strong>narahem</strong> container and choose <strong>Logs</strong>. Look for the line
+              <code>NARAHEM FIRST-RUN SETUP TOKEN</code>.
+            </li>
+            <li>
+              Enter the token, a household name, your email and a password of at least 15
+              characters. You become the household's administrator, and setup closes for good.
+            </li>
+            <li>
+              Sign in. The browser you set up with is trusted straight away and opens the household
+              map.
+            </li>
+          </ol>
+          {{video_setup_server}}
+        </section>
+
+        <section id="email">
+          <h2><span class="step">5</span>Connect email</h2>
+          <ol>
+            <li>
+              Open <strong>Admin settings</strong>, then <strong>Email</strong>. Type your email
+              address and pick your provider (Gmail, iCloud, Yahoo, Fastmail, Outlook and more). The
+              server details are filled in for you.
+            </li>
+            <li>
+              Follow the steps shown to create an app password, paste it in, and save. Other
+              providers: open <strong>Advanced: server details</strong> and enter them yourself.
+            </li>
+            <li>
+              Choose <strong>Send test to me</strong>, then
+              <strong>Confirm administrator email</strong> and open the link in the email you
+              receive.
+            </li>
+          </ol>
+          <p>The server stores these settings encrypted.</p>
+          {{video_setup_email}}
+        </section>
+
+        <section id="browser">
+          <h2><span class="step">6</span>If your browser asks to be trusted</h2>
+          <p>
+            Locations are encrypted for specific devices, so your browser needs its own keys before
+            it can show the map. This happens by itself when you sign in right after setup. If you
+            closed that tab first, the page asks instead:
+          </p>
+          <ol>
+            <li>
+              On <strong>Approve your first device.</strong>, the page asks for a device bootstrap
+              token.
+            </li>
+            <li>
+              In Portainer, open the <strong>narahem</strong> container, choose
+              <strong>Console</strong>, connect with <code>/bin/sh</code> and run:
+              <pre><code>python manage.py device-bootstrap-token</code></pre>
+              With Docker Compose:
+              <code>docker compose exec narahem python manage.py device-bootstrap-token</code>.
+            </li>
+            <li>
+              Paste the token and choose <strong>Trust this first device</strong>. Use a browser
+              that only you use.
+            </li>
+          </ol>
+        </section>
+
+        <section id="family">
+          <h2><span class="step">7</span>Invite your family</h2>
+          <ol>
+            <li>
+              Open <strong>Manage household</strong> and enter each person's email address to invite
+              them.
+            </li>
+            <li>
+              They get an email to choose a username and password. They can also finish this in the
+              app with <strong>Set up invited account</strong>.
+            </li>
+            <li>Once their phone joins, they appear on your map.</li>
+          </ol>
+          {{video_setup_invite}}
+        </section>
+
+        <section id="phones">
+          <h2><span class="step">8</span>Connect the phones</h2>
+          <ol>
+            <li>
+              Install the app: <a href="index.html#beta">iPhone through TestFlight, or Android</a>.
+            </li>
+            <li>
+              Enter your server address, your email or phone number and your password, and sign in.
+            </li>
+            <li>
+              Request the code (<strong>Send my six-digit code</strong> on iPhone,
+              <strong>Send verification code</strong> on Android), then enter the six-digit code
+              from the email or text. The phone joins the household right away.
+            </li>
+            <li>
+              Allow location <strong>Always</strong> so the phone can share while the app is closed,
+              and allow notifications for arrival alerts and Find My Phone.
+            </li>
+            <li>
+              Everyone in the household sees the phone's location at first, and people who join
+              later are added automatically. To change that, open <strong>Settings</strong>,
+              <strong>Permissions</strong>, then <strong>Who can see this phone?</strong>
+            </li>
+          </ol>
+          {{video_setup_phones}}
+          <p>
+            That's it. Everyone who shares with you appears on your map, and trips start recording
+            automatically.
+          </p>
+        </section>
+
+        <section id="texting">
+          <h2>Optional: text messages</h2>
+          <p>
+            With a <a href="https://textbelt.com">Textbelt</a> key, you can invite people by phone
+            number, and they can sign in with it and get their codes and reset links by text.
+            Without one, {{name}} uses email only.
+          </p>
+          <ol>
+            <li>
+              Buy credit at Textbelt, and ask Textbelt support to allow links from your server's
+              address: invitations and reset links won't send until they do.
+            </li>
+            <li>
+              Enter the key in <strong>Admin settings</strong> under <strong>Text messages</strong>,
+              or set <code>NARAHEM_TEXTBELT_KEY</code> on the server, which wins over the saved key.
+            </li>
+            <li>
+              Send yourself a test text. When you invite someone by email, you can add their phone
+              number too, and the invitation goes to both.
+            </li>
+          </ol>
+          <p>Phone numbers, codes and links pass through Textbelt.</p>
+        </section>
+
+        <section id="google-maps">
+          <h2>Optional: Google Maps in the web app</h2>
+          <p>
+            The web app uses OpenStreetMap unless you give the server a Google Maps key. The iPhone
+            and Android apps already include their own maps; this only changes the web app.
+          </p>
+          <ol>
+            <li>
+              In the <a href="https://console.cloud.google.com/">Google Cloud console</a>, create a
+              project and turn on billing. Google charges only above its monthly free allowance.
+            </li>
+            <li>
+              Under <strong>APIs &amp; Services → Library</strong>, enable
+              <strong>Maps JavaScript API</strong> and <strong>Geocoding API</strong>, and
+              optionally <strong>Maps Static API</strong> for map backgrounds on trip cards.
+            </li>
+            <li>
+              Under <strong>Credentials</strong>, create an <strong>API key</strong>. Restrict it to
+              <strong>Websites</strong> with your address, such as
+              <code>https://family.example.com/*</code>, and to the APIs you enabled. Browsers can
+              see this key, so the restrictions are what protect it.
+            </li>
+            <li>
+              In Portainer, add <code>NARAHEM_GOOGLE_MAPS_API_KEY</code> with the key to the stack's
+              environment variables and choose <strong>Update the stack</strong>.
+            </li>
+            <li>
+              On the <strong>Household map</strong>, choose <strong>Load Google Maps</strong>.
+            </li>
+          </ol>
+          <p>
+            Google receives the area of the map you're viewing, as OpenStreetMap does; your family's
+            locations are still decrypted only in your browser.
+          </p>
+        </section>
+
+        <section>
+          <h2>Keeping it running</h2>
+          <ul>
+            <li>
+              <strong>Updates:</strong> in Portainer, open the stack, choose
+              <strong>Update the stack</strong> and turn on <strong>Re-pull image</strong>. Your
+              data stays in place.
+            </li>
+            <li>
+              <strong>Backups:</strong> back up the whole <code>/opt/docker/narahem</code> folder.
+              The <code>server-data</code> folder holds the server's encryption key, which is needed
+              to restore.
+            </li>
+            <li><strong>Help:</strong> email <a href="mailto:{{contact}}">{{contact}}</a>.</li>
+          </ul>
+        </section>
+      </article>
+    </main>
+    <footer>
+      <p>
+        {{name}} by {{publisher}} · <a href="index.html">Home</a> ·
+        <a href="privacy.html">Privacy policy</a>
+      </p>
+    </footer>
+  </body>
+</html>

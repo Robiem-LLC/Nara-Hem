@@ -1,0 +1,17 @@
+# The Nära Hem website as a Portainer stack, on a plain port for your own reverse proxy or
+# Cloudflare Tunnel (point a public hostname at http://<docker host>:8189).
+# compose.yaml instead runs the site together with its own cloudflared.
+services:
+  site:
+    image: ${SITE_IMAGE:?Set SITE_IMAGE to the published site image, e.g. ghcr.io/OWNER/nara-hem-site}:${SITE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - '${SITE_PORT:-8189}:8080'
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m

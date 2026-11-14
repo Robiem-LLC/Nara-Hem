@@ -1,0 +1,182 @@
+name: iOS Mac mini
+# Rack relocation verification: confirm the headless Mac runner can build and publish.
+on:
+  push:
+    branches: [main, dev]
+    paths: ['apps/ios/**', 'ci/runner/**', 'ci/publish/**', '.github/workflows/ios-mac.yaml']
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'fast = package ASAP; validate = also compile and run simulator tests'
+        type: choice
+        default: fast
+        options: [fast, validate]
+      signing:
+        description: 'none = simulator only; ad-hoc = signed installable device IPA; app-store = upload to TestFlight'
+        type: choice
+        default: ad-hoc
+        options: [none, development, ad-hoc, app-store]
+      publish_to_share:
+        description: "Copy Ad Hoc IPA to the Mac's Nära Hem file share; false = GitHub artifact only"
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: narahem-ios-mac
+  cancel-in-progress: false
+jobs:
+  simulator:
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, macOS, ARM64, narahem-ios]
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+          clean: true
+      - name: Prepare logs and check toolchain
+        run: |
+          mkdir -p .remote-build/logs
+          bash ci/remote/build.sh doctor 2>&1 | tee .remote-build/logs/doctor.log
+      - name: Check requested signing and delivery configuration
+        if: github.event_name == 'push' || inputs.signing != 'none'
+        env:
+          SIGNING_READY: ${{ vars.NARAHEM_IOS_SIGNING_READY }}
+          P12_SET: ${{ secrets.IOS_P12_BASE64 != '' }}
+          PASSWORD_SET: ${{ secrets.IOS_P12_PASSWORD != '' }}
+          # The app and its alert extension each need a matching profile.
+          PROFILE_SET: ${{ github.event_name == 'push' && secrets.IOS_PROFILE_BASE64 != '' && secrets.IOS_EXTENSION_PROFILE_BASE64 != '' || inputs.signing == 'development' && secrets.IOS_DEVELOPMENT_PROFILE_BASE64 != '' && secrets.IOS_EXTENSION_DEVELOPMENT_PROFILE_BASE64 != '' || inputs.signing == 'ad-hoc' && secrets.IOS_PROFILE_BASE64 != '' && secrets.IOS_EXTENSION_PROFILE_BASE64 != '' || inputs.signing == 'app-store' && secrets.IOS_APPSTORE_PROFILE_BASE64 != '' && secrets.IOS_EXTENSION_APPSTORE_PROFILE_BASE64 != '' }}
+          # TestFlight uploads also need an App Store Connect API key.
+          UPLOAD_SET: ${{ inputs.signing != 'app-store' || secrets.APP_STORE_CONNECT_API_KEY_ID != '' && secrets.APP_STORE_CONNECT_ISSUER_ID != '' && secrets.APP_STORE_CONNECT_API_KEY_P8 != '' }}
+          MAPS_SET: ${{ secrets.NARAHEM_GOOGLE_MAPS_IOS_API_KEY != '' }}
+          SHARE_ENABLED: ${{ vars.NARAHEM_LOCAL_PUBLISH_ENABLED }}
+          SHARE_REQUESTED: ${{ github.event_name == 'push' || (inputs.signing == 'ad-hoc' && inputs.publish_to_share) }}
+        run: |
+          if [[ "$SIGNING_READY" != true || "$P12_SET" != true || "$PASSWORD_SET" != true || "$PROFILE_SET" != true || "$MAPS_SET" != true ]]; then
+            echo 'Signing requires readiness approval and P12/password/matching profile/Maps secrets.' >&2
+            exit 1
+          fi
+          if [[ "$UPLOAD_SET" != true ]]; then
+            echo 'TestFlight upload requires the APP_STORE_CONNECT_API_KEY_ID, APP_STORE_CONNECT_ISSUER_ID and APP_STORE_CONNECT_API_KEY_P8 secrets.' >&2
+            exit 1
+          fi
+          if [[ "$SHARE_REQUESTED" == true ]]; then
+            [[ "$SHARE_ENABLED" == true ]] || { echo 'Local publishing not enabled; use publish_to_share=false for artifact-only.' >&2; exit 1; }
+            python3 ../../ci/publish/publish.py --check
+          fi
+      - name: Test runner and publication safeguards
+        run: |
+          python3 -m unittest discover -s ../../ci/runner -v 2>&1 | tee .remote-build/logs/runner-tests.log
+          python3 -m unittest discover -s ../../ci/publish -v 2>&1 | tee .remote-build/logs/publisher-tests.log
+      - name: Build simulator app (unsigned fast build or validation)
+        if: inputs.mode == 'validate' || (github.event_name == 'workflow_dispatch' && inputs.signing == 'none')
+        run: bash ci/remote/build.sh build 2>&1 | tee .remote-build/logs/build.log
+      - name: Run simulator tests (explicit validation only)
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'validate'
+        run: |
+          if ! bash ci/remote/build.sh test > .remote-build/logs/test.log 2>&1; then
+            cat .remote-build/logs/test.log
+            # Annotations stay readable through the API when raw logs and artifacts are not.
+            summary=$(grep -E 'error:|failed|XCTAssert|Testing failed|\.swift:[0-9]+' .remote-build/logs/test.log | tail -n 40 | cut -c1-300 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=iOS simulator tests failed::$summary"
+            exit 1
+          fi
+          cat .remote-build/logs/test.log
+      - name: Check Swift formatting (explicit validation only)
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'validate'
+        run: |
+          # The patch shows what swift-format would change; the checkout itself is left untouched.
+          xcrun swift-format --version | tee .remote-build/logs/swift-format.log
+          xcrun swift-format format --configuration .swift-format --in-place --recursive \
+            Sources Tests NotificationService Showcase
+          git diff > .remote-build/logs/swift-format.patch
+          git checkout -- .
+          if ! xcrun swift-format lint --configuration .swift-format --strict --recursive \
+            Sources Tests NotificationService Showcase >> .remote-build/logs/swift-format.log 2>&1; then
+            cat .remote-build/logs/swift-format.log
+            # The patch also goes to the log, for readers who cannot download artifacts.
+            echo '--- swift-format.patch ---'
+            cat .remote-build/logs/swift-format.patch
+            echo '--- end of swift-format.patch ---'
+            echo '::error title=Swift formatting::Run tools/format/run.sh fix swift, or apply swift-format.patch from the run artifacts.'
+            exit 1
+          fi
+      - name: Sign and export verified device IPA
+        id: sign
+        if: github.event_name == 'push' || inputs.signing != 'none'
+        env:
+          SIGNING_METHOD: ${{ github.event_name == 'push' && 'ad-hoc' || inputs.signing }}
+          IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ github.event_name == 'workflow_dispatch' && inputs.signing == 'development' && secrets.IOS_DEVELOPMENT_PROFILE_BASE64 || github.event_name == 'workflow_dispatch' && inputs.signing == 'app-store' && secrets.IOS_APPSTORE_PROFILE_BASE64 || secrets.IOS_PROFILE_BASE64 }}
+          IOS_EXTENSION_PROFILE_BASE64: ${{ github.event_name == 'workflow_dispatch' && inputs.signing == 'development' && secrets.IOS_EXTENSION_DEVELOPMENT_PROFILE_BASE64 || github.event_name == 'workflow_dispatch' && inputs.signing == 'app-store' && secrets.IOS_EXTENSION_APPSTORE_PROFILE_BASE64 || secrets.IOS_EXTENSION_PROFILE_BASE64 }}
+          NARAHEM_GOOGLE_MAPS_IOS_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_IOS_API_KEY }}
+        run: python3 ../../ci/runner/with-signing.py --method "$SIGNING_METHOD" 2>&1 | tee .remote-build/logs/signing.log
+      - name: Upload verified signed IPA before delivery
+        if: success() && steps.sign.outputs.ipa != ''
+        # GitHub's artifact storage can fill up; delivery to the share doesn't need it.
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: NaraHem-iOS-Mac-${{ github.ref_name }}-${{ github.event_name == 'push' && 'ad-hoc' || inputs.signing }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            ${{ steps.sign.outputs.ipa }}
+            ${{ steps.sign.outputs.receipt }}
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload verified App Store IPA to TestFlight
+        id: testflight
+        if: success() && steps.sign.outputs.ipa != '' && github.event_name == 'workflow_dispatch' && inputs.signing == 'app-store'
+        env:
+          IPA: ${{ steps.sign.outputs.ipa }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+        run: python3 ../../ci/runner/upload-testflight.py --ipa "$IPA" 2>&1 | tee .remote-build/logs/testflight.log
+      - name: Deliver verified Ad Hoc IPA to Mac share
+        id: deliver
+        if: success() && steps.sign.outputs.ipa != '' && (github.event_name == 'push' || (inputs.signing == 'ad-hoc' && inputs.publish_to_share))
+        env:
+          IPA: ${{ steps.sign.outputs.ipa }}
+          RECEIPT: ${{ steps.sign.outputs.receipt }}
+        run: |
+          python3 ../../ci/publish/publish.py --platform ios --source "$(dirname "$IPA")" --receipt "$RECEIPT" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --commit "$GITHUB_SHA" --channel "$GITHUB_REF_NAME" \
+            2>&1 | tee .remote-build/logs/publish.log
+      - name: Upload compact build logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: NaraHem-iOS-Mac-results-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            apps/ios/.remote-build/logs/*.log
+            apps/ios/.remote-build/logs/*.patch
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Describe actual outcome
+        if: always()
+        env:
+          SIGNED_IPA: ${{ steps.sign.outputs.ipa }}
+          SIGNING_OUTCOME: ${{ steps.sign.outcome }}
+          DELIVERY_OUTCOME: ${{ steps.deliver.outcome }}
+          TESTFLIGHT_OUTCOME: ${{ steps.testflight.outcome }}
+          METHOD: ${{ github.event_name == 'push' && 'ad-hoc' || inputs.signing || 'none' }}
+        run: |
+          if [[ "$SIGNING_OUTCOME" == success && -n "$SIGNED_IPA" ]]; then
+            echo "Verified signed device IPA: $METHOD. See signed artifact." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No verified installable IPA produced. Simulator results are not device installers.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Local share delivery: $DELIVERY_OUTCOME (only success confirms delivery)." >> "$GITHUB_STEP_SUMMARY"
+          echo "TestFlight upload: $TESTFLIGHT_OUTCOME (success means App Store Connect accepted it for processing)." >> "$GITHUB_STEP_SUMMARY"

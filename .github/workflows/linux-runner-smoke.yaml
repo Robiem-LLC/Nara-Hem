@@ -1,0 +1,65 @@
+name: Linux runner smoke test
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/linux-runner-smoke.yaml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.repository == vars.NARAHEM_TRUSTED_REPOSITORY && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check server CI toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          python3 -m pip --version
+          test "$(python3 -c 'import sys; print(sys.version_info >= (3, 12))')" = True
+          node --version
+          npm --version
+          command -v git
+          command -v docker
+          command -v chromium || command -v google-chrome || true
+      - name: Verify isolated Docker engine and compose CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version
+          docker compose version
+          docker info --format 'Engine {{.ServerVersion}}; driver {{.Driver}}; cgroups {{.CgroupVersion}}'
+          test "${DOCKER_HOST:-}" = 'tcp://docker:2375'
+          docker run --rm hello-world
+      - name: Check shared workspace visibility to Docker containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$GITHUB_WORKSPACE:/checkout:ro" alpine:3.21 test -f /checkout/Dockerfile
+      - name: Verify PostgreSQL service accessible from runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f narahem-ci-pg-smoke >/dev/null 2>&1 || true
+          trap 'docker rm -f narahem-ci-pg-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d --name narahem-ci-pg-smoke -e POSTGRES_PASSWORD=synthetic-ci-password -p 5432:5432 postgres:17-bookworm
+          python3 - <<'PY'
+          import socket, time
+          for retry in range(30):
+              try:
+                  with socket.create_connection(('docker', 5432), timeout=2):
+                      print('PostgreSQL port reachable through dedicated DinD network')
+                      break
+              except OSError:
+                  time.sleep(2)
+          else:
+              raise RuntimeError('PostgreSQL port unreachable from runner container')
+          PY

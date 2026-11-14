@@ -1,0 +1,556 @@
+import base64
+import datetime
+import json
+import os
+import time
+import unittest
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from fastapi.testclient import TestClient
+from nacl.signing import VerifyKey
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from narahem import alexa_api, alexa_speech, alexa_verify, demo_family
+from narahem.app import HASHER
+from narahem.data_service import canonical
+from narahem.models import Account, FindPhoneCommand, RosterRevision, ServiceState
+from tests import test_demo_family, test_relay, test_setup
+
+REDIRECT = "https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA"
+SKILL = "amzn1.ask.skill.12345678-1234-1234-1234-123456789012"
+
+LINK = {
+    "client_id": alexa_api.CLIENT_ID,
+    "redirect_uri": REDIRECT,
+    "state": "amazon-state",
+    "response_type": "code",
+}
+
+STORE_SKILL = "amzn1.ask.skill.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+RELAY = "https://alexa-relay.example.invalid"
+STORE = {"NARAHEM_ALEXA_RELAY_URL": RELAY, "NARAHEM_ALEXA_STORE_SKILL_ID": STORE_SKILL}
+
+
+def now():
+    """Returns the current time as Alexa writes it."""
+    return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def amazon(app):
+    """Returns a client that calls like Amazon's servers: no Origin header."""
+    return TestClient(app, base_url=test_setup.PUBLIC)
+
+
+class AlexaOffTests(unittest.TestCase):
+    """Without NARAHEM_ALLOW_ALEXA the server has no Alexa addresses at all."""
+
+    setUp = test_relay.RelayTests.setUp
+    start = test_relay.RelayTests.start
+    tearDown = test_relay.RelayTests.tearDown
+    setup_owner = test_relay.RelayTests.setup_owner
+    login = test_relay.RelayTests.login
+    configure = test_relay.RelayTests.configure
+
+    def test_alexa_is_off_unless_allowed(self):
+        self.assertEqual(self.client.get("/api/alexa").status_code, 404)
+        reply = amazon(self.app).post("/alexa/skill", json={})
+        self.assertEqual(reply.status_code, 404)
+
+
+@patch.dict(os.environ, {**test_demo_family.REVIEW, alexa_api.ENVIRONMENT: "true"})
+@patch.object(demo_family.httpx, "get", test_demo_family.offline)
+@patch.object(alexa_api.household_alerts, "lookup_address", lambda *a: "Near 400 Elm St, Portland")
+@patch.object(alexa_verify, "check", lambda headers, body, request: None)
+class AlexaTests(unittest.TestCase):
+    """Linking Alexa with the admin's sign-in, asking where someone is and ringing a phone."""
+
+    start = test_relay.RelayTests.start
+    tearDown = test_relay.RelayTests.tearDown
+    setup_owner = test_relay.RelayTests.setup_owner
+    login = test_relay.RelayTests.login
+    configure = test_relay.RelayTests.configure
+    register = test_relay.RelayTests.register
+    identity = test_relay.RelayTests.identity
+    call = test_relay.RelayTests.call
+    roster = test_relay.RelayTests.roster
+    bootstrap = test_relay.RelayTests.bootstrap
+    family = test_demo_family.DemoFamilyTests.family
+
+    def setUp(self):
+        # The server decides at start-up whether it has Alexa addresses.
+        with patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true"}):
+            test_relay.RelayTests.setUp(self)
+
+    def move_in(self):
+        """Moves the demo family in, so there are phones with locations to ask about."""
+        owner = self.bootstrap()
+        service = self.client.post("/api/enrollment/signer", json={}).json()
+        self.call(owner, "POST", "/api/roster", self.roster(owner, [owner, service]))
+        family = self.family()
+        family.start()
+        return family
+
+    def link(self):
+        """Links Alexa as Amazon does and returns the access and refresh tokens."""
+        status = self.client.get("/api/alexa").json()
+        self.client.put("/api/alexa", json={"skill_id": SKILL})
+        page = self.client.get("/alexa/link", params=LINK)
+        self.assertIn("Link Nära Hem to Alexa", page.text)
+        form = dict(LINK, email=test_setup.OWNER, password=test_setup.PASSWORD)
+        signed = self.client.post(
+            "/alexa/link",
+            content="&".join(f"{k}={v}" for k, v in form.items()).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            follow_redirects=False,
+        )
+        self.assertEqual(signed.status_code, 303, signed.text)
+        back = urlsplit(signed.headers["location"])
+        self.assertEqual(f"https://{back.hostname}{back.path}", REDIRECT)
+        query = {k: v[0] for k, v in parse_qs(back.query).items()}
+        self.assertEqual(query["state"], "amazon-state")
+        tokens = self.exchange(
+            status["client_secret"],
+            grant_type="authorization_code",
+            code=query["code"],
+            redirect_uri=REDIRECT,
+        )
+        self.assertEqual(tokens.status_code, 200, tokens.text)
+        again = self.exchange(
+            status["client_secret"],
+            grant_type="authorization_code",
+            code=query["code"],
+            redirect_uri=REDIRECT,
+        )
+        self.assertEqual(again.status_code, 400, "a code works once")
+        return status["client_secret"], tokens.json()
+
+    def exchange(self, secret, **form):
+        """Calls the token address as Amazon does: a form, HTTP Basic, no Origin."""
+        basic = base64.b64encode(f"{alexa_api.CLIENT_ID}:{secret}".encode()).decode()
+        return amazon(self.app).post(
+            "/alexa/token",
+            content="&".join(f"{k}={v}" for k, v in form.items()).encode(),
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": "Basic " + basic,
+            },
+        )
+
+    def ask(self, token, intent=None, person=None, attributes=None, kind="IntentRequest"):
+        """Sends Alexa's request for an intent and returns the speech and the response."""
+        request = {"type": kind, "timestamp": "2026-11-13T00:00:00Z"}
+        if intent:
+            request["intent"] = {"name": intent, "slots": {"person": {"value": person}}}
+        body = {
+            "version": "1.0",
+            "session": {"attributes": attributes or {}},
+            "context": {
+                "System": {"application": {"applicationId": SKILL}, "user": {"accessToken": token}}
+            },
+            "request": request,
+        }
+        reply = amazon(self.app).post("/alexa/skill", json=body)
+        self.assertEqual(reply.status_code, 200, reply.text)
+        response = reply.json()
+        return response["response"].get("outputSpeech", {}).get("text", ""), response
+
+    def test_alexa_links_with_the_admin_sign_in_and_answers(self):
+        family = self.move_in()
+        secret, tokens = self.link()
+        access = tokens["access_token"]
+        self.assertIn("where someone is", self.ask(access, kind="LaunchRequest")[0])
+
+        said, _ = self.ask(access, "WhereIsIntent", "Maya")
+        self.assertTrue(said.startswith("Maya has been at Laurelhurst Park for"), said)
+        said, response = self.ask(access, "WhereIsIntent", "Mya's")
+        self.assertEqual(said, "Did you mean Maya?")
+        self.assertFalse(response["response"]["shouldEndSession"])
+        said, _ = self.ask(access, "AMAZON.YesIntent", attributes=response["sessionAttributes"])
+        self.assertTrue(said.startswith("Maya has been at Laurelhurst Park"), said)
+        said, _ = self.ask(access, "WhereIsIntent", "Zed")
+        self.assertIn("I couldn't find anyone called Zed", said)
+        self.assertIn("Maya", said)
+
+        said, _ = self.ask(access, "FindPhoneIntent", "maya")
+        self.assertEqual(said, "Maya's phone doesn't have Find my phone turned on.")
+        maya = family.phones["Maya"]
+        maya.device.put(
+            "/api/find-phone/capability", json={"enabled": True, "platform": "android"}
+        ).raise_for_status()
+        said, _ = self.ask(access, "FindPhoneIntent", "Maya")
+        self.assertEqual(said, "Ringing Maya's phone now.")
+        with Session(self.app.state.engine) as db:
+            command = db.scalar(select(FindPhoneCommand))
+            envelope = json.loads(command.envelope)
+            state = db.get(ServiceState, 1)
+            devices = json.loads(db.get(RosterRevision, state.revision).payload)["devices"]
+            owner = db.scalar(select(Account).where(Account.role == "admin"))
+        # What the phones check: signed by a device in the roster that belongs to the admin.
+        signer = next(d for d in devices if d["id"] == envelope["body"]["issuer"])
+        self.assertEqual(signer["account_id"], owner.id)
+        VerifyKey(base64.b64decode(signer["signing_key"])).verify(
+            canonical(envelope["body"]), base64.b64decode(envelope["signature"])
+        )
+        self.assertEqual(envelope["body"]["target"], maya.id)
+        self.assertEqual(envelope["body"]["action"], "ring")
+        fetched = maya.device.get("/api/find-phone/command").json()
+        self.assertEqual(fetched["command"]["body"]["id"], envelope["body"]["id"], fetched)
+
+        refreshed = self.exchange(
+            secret, grant_type="refresh_token", refresh_token=tokens["refresh_token"]
+        )
+        self.assertEqual(refreshed.status_code, 200, refreshed.text)
+        said, response = self.ask(access, "WhereIsIntent", "Maya")
+        self.assertEqual(response["response"]["card"], {"type": "LinkAccount"}, "old token ends")
+        access = refreshed.json()["access_token"]
+        self.assertIn("Maya", self.ask(access, "WhereIsIntent", "Maya")[0])
+
+        links = self.client.get("/api/alexa").json()["links"]
+        self.assertEqual(len(links), 1)
+        self.assertIsNotNone(links[0]["last_used"])
+        self.client.post(f"/api/alexa/links/{links[0]['id']}/revoke", json={})
+        said, response = self.ask(access, "WhereIsIntent", "Maya")
+        self.assertIn("link Nara Hem", said)
+        self.assertEqual(response["response"]["card"], {"type": "LinkAccount"})
+
+    def test_only_the_admin_can_link_and_a_new_password_ends_it(self):
+        self.move_in()
+        secret, tokens = self.link()
+        form = dict(LINK, email="alex@" + demo_family.DOMAIN, password="anything at all")
+        refused = self.client.post(
+            "/alexa/link",
+            content="&".join(f"{k}={v}" for k, v in form.items()).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            follow_redirects=False,
+        )
+        self.assertEqual(refused.status_code, 200)
+        self.assertIn("isn&#x27;t the administrator", refused.text)
+        bad = dict(LINK, redirect_uri="https://evil.example/api/skill/link/x")
+        self.assertIn("Start linking", self.client.get("/alexa/link", params=bad).text)
+        self.assertEqual(self.exchange("wrong", grant_type="refresh_token").status_code, 401)
+        with Session(self.app.state.engine) as db:
+            owner = db.scalar(select(Account).where(Account.role == "admin"))
+            owner.password = HASHER.hash("a brand new admin password")
+            db.commit()
+        said, _ = self.ask(tokens["access_token"], "WhereIsIntent", "Maya")
+        self.assertIn("link Nara Hem", said)
+        retry = self.exchange(
+            secret, grant_type="refresh_token", refresh_token=tokens["refresh_token"]
+        )
+        self.assertEqual(retry.status_code, 400)
+        self.assertEqual(self.client.get("/api/alexa").json()["links"], [])
+
+    def test_requests_for_another_skill_are_refused(self):
+        self.move_in()
+        _, tokens = self.link()
+        body = {
+            "context": {
+                "System": {
+                    "application": {"applicationId": SKILL.replace("1234", "9999")},
+                    "user": {"accessToken": tokens["access_token"]},
+                }
+            },
+            "request": {"type": "LaunchRequest", "timestamp": "2026-11-13T00:00:00Z"},
+        }
+        reply = amazon(self.app).post("/alexa/skill", json=body)
+        self.assertEqual(reply.status_code, 400)
+
+
+@patch.dict(os.environ, {**test_demo_family.REVIEW, alexa_api.ENVIRONMENT: "true", **STORE})
+@patch.object(demo_family.httpx, "get", test_demo_family.offline)
+@patch.object(alexa_verify, "check", lambda headers, body, request: None)
+class AlexaStoreTests(unittest.TestCase):
+    """The published skill, linked through the Nära Hem relay (played here by the test)."""
+
+    setUp = AlexaTests.setUp
+    start = test_relay.RelayTests.start
+    tearDown = test_relay.RelayTests.tearDown
+    setup_owner = test_relay.RelayTests.setup_owner
+    login = test_relay.RelayTests.login
+    configure = test_relay.RelayTests.configure
+    register = test_relay.RelayTests.register
+    identity = test_relay.RelayTests.identity
+    call = test_relay.RelayTests.call
+    roster = test_relay.RelayTests.roster
+    bootstrap = test_relay.RelayTests.bootstrap
+    family = test_demo_family.DemoFamilyTests.family
+    move_in = AlexaTests.move_in
+
+    def relay_link(self, verifier="v" * 43):
+        fields = {
+            "client_id": alexa_api.RELAY_CLIENT_ID,
+            "redirect_uri": RELAY + "/callback",
+            "state": "sealed-relay-state",
+            "response_type": "code",
+            "code_challenge": alexa_api.challenge_for(verifier),
+            "code_challenge_method": "S256",
+        }
+        page = self.client.get("/alexa/link", params=fields)
+        self.assertIn("Administrator email", page.text)
+        self.assertIn(RELAY, page.headers["content-security-policy"])
+        form = dict(fields, email=test_setup.OWNER, password=test_setup.PASSWORD)
+        signed = self.client.post(
+            "/alexa/link",
+            content="&".join(f"{k}={v}" for k, v in form.items()).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            follow_redirects=False,
+        )
+        self.assertEqual(signed.status_code, 303, signed.text)
+        back = urlsplit(signed.headers["location"])
+        self.assertEqual(f"https://{back.hostname}{back.path}", RELAY + "/callback")
+        return {k: v[0] for k, v in parse_qs(back.query).items()}["code"]
+
+    def relay_token(self, **form):
+        return amazon(self.app).post(
+            "/alexa/token",
+            content="&".join(f"{k}={v}" for k, v in form.items()).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    def test_the_store_skill_links_through_the_relay(self):
+        self.move_in()
+        info = amazon(self.app).get("/alexa/info").json()
+        self.assertEqual(info, {"service": "nara-hem", "alexa": True, "store": True})
+        code = self.relay_link()
+        swap = dict(
+            grant_type="authorization_code",
+            code=code,
+            redirect_uri=RELAY + "/callback",
+            client_id=alexa_api.RELAY_CLIENT_ID,
+        )
+        self.assertEqual(
+            self.relay_token(**swap, code_verifier="w" * 43).status_code,
+            400,
+            "only the relay that started the sign-in can finish it",
+        )
+        code = self.relay_link()
+        tokens = self.relay_token(**dict(swap, code=code), code_verifier="v" * 43)
+        self.assertEqual(tokens.status_code, 200, tokens.text)
+        server_token = tokens.json()["access_token"]
+        body = {
+            "context": {
+                "System": {
+                    "application": {"applicationId": STORE_SKILL},
+                    "user": {"accessToken": "sealed-by-the-relay"},
+                }
+            },
+            "request": {
+                "type": "IntentRequest",
+                "timestamp": now(),
+                "intent": {"name": "WhereIsIntent", "slots": {"person": {"value": "Leo"}}},
+            },
+        }
+        # From the Amazon-hosted forwarder: no Amazon signature, but the link token.
+        token = {"X-Narahem-Alexa-Token": server_token}
+        reply = amazon(self.app).post("/alexa/skill", json=body, headers=token)
+        self.assertIn("Leo", reply.json()["response"]["outputSpeech"]["text"])
+        refused = amazon(self.app).post("/alexa/skill", json=body)
+        self.assertEqual(refused.status_code, 400, "unsigned needs the link token")
+        stale = dict(body, request=dict(body["request"], timestamp="2026-01-01T00:00:00Z"))
+        old = amazon(self.app).post("/alexa/skill", json=stale, headers=token)
+        self.assertEqual(old.status_code, 400, "an old request can't be replayed")
+        wrong = amazon(self.app).post(
+            "/alexa/skill", json=body, headers={"X-Narahem-Alexa-Token": "not-the-token"}
+        )
+        self.assertEqual(wrong.json()["response"]["card"], {"type": "LinkAccount"})
+        links = self.client.get("/api/alexa").json()
+        self.assertTrue(links["store"])
+        self.assertEqual([link["kind"] for link in links["links"]], ["store"])
+        refresh = self.relay_token(
+            grant_type="refresh_token",
+            refresh_token=tokens.json()["refresh_token"],
+            client_id=alexa_api.RELAY_CLIENT_ID,
+        )
+        self.assertEqual(refresh.status_code, 200, refresh.text)
+
+    def test_relay_codes_only_go_back_to_the_relay(self):
+        bad = {
+            "client_id": alexa_api.RELAY_CLIENT_ID,
+            "redirect_uri": "https://elsewhere.example/callback",
+            "response_type": "code",
+            "code_challenge": "c" * 43,
+            "code_challenge_method": "S256",
+        }
+        self.assertIn("Start linking", self.client.get("/alexa/link", params=bad).text)
+        bad.update(redirect_uri=RELAY + "/callback", code_challenge_method="plain")
+        self.assertIn("Start linking", self.client.get("/alexa/link", params=bad).text)
+
+
+@patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true", **STORE})
+class AlexaSignatureRequiredTests(unittest.TestCase):
+    """A private skill's requests must always carry Amazon's signature."""
+
+    start = test_relay.RelayTests.start
+    tearDown = test_relay.RelayTests.tearDown
+    setup_owner = test_relay.RelayTests.setup_owner
+    login = test_relay.RelayTests.login
+    configure = test_relay.RelayTests.configure
+
+    def setUp(self):
+        with patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true", **STORE}):
+            test_relay.RelayTests.setUp(self)
+
+    def test_unsigned_requests_for_a_private_skill_are_refused(self):
+        self.client.put("/api/alexa", json={"skill_id": SKILL})
+        body = {
+            "context": {"System": {"application": {"applicationId": SKILL}, "user": {}}},
+            "request": {"type": "LaunchRequest", "timestamp": now()},
+        }
+        reply = amazon(self.app).post(
+            "/alexa/skill", json=body, headers={"X-Narahem-Alexa-Token": "anything"}
+        )
+        self.assertEqual(reply.status_code, 400)
+
+
+class AlexaSpeechTests(unittest.TestCase):
+    """The words Alexa says."""
+
+    members = [("a", "Sam"), ("k", "Madelyn Rivera"), ("r", "Grandma Rosa")]
+    zone = ZoneInfo("America/Los_Angeles")
+
+    def at(self, day, hour, minute):
+        moment = datetime.datetime(2026, 11, day, hour, minute, tzinfo=self.zone)
+        return int(moment.timestamp() * 1000)
+
+    def test_names_match_exactly_closely_or_not_at_all(self):
+        self.assertEqual(alexa_speech.match_name("sam's", self.members), ("exact", ("a", "Sam")))
+        self.assertEqual(alexa_speech.match_name("Madelyn", self.members)[0], "exact")
+        self.assertEqual(alexa_speech.match_name("rosa", self.members)[0], "exact")
+        self.assertEqual(alexa_speech.match_name("rossa", self.members)[0], "close")
+        self.assertEqual(
+            alexa_speech.match_name("madalyn", self.members),
+            ("close", ("k", "Madelyn Rivera")),
+        )
+        self.assertEqual(alexa_speech.match_name("Zed", self.members), (None, None))
+        self.assertEqual(alexa_speech.names(self.members), "Sam, Madelyn Rivera and Grandma Rosa")
+
+    def test_where_someone_is(self):
+        now = self.at(13, 18, 0)
+        fix = {"at": now - 60000, "speed": 0, "trip": None}
+        where = alexa_speech.where
+        self.assertEqual(
+            where("Sam", fix, "Home", self.at(13, 16, 30), None, now, self.zone),
+            "Sam has been at Home since 4:30 PM.",
+        )
+        self.assertEqual(
+            where("Sam", fix, "Home", self.at(12, 16, 30), None, now, self.zone),
+            "Sam has been at Home since yesterday at 4:30 PM.",
+        )
+        self.assertEqual(
+            where("Sam", fix, "Home", self.at(13, 16, 30), None, now, None),
+            "Sam has been at Home for 2 hours.",
+        )
+        driving = dict(fix, speed=24)
+        self.assertEqual(
+            where("Madelyn", driving, None, None, "Near 12 Route 9, Springfield", now, None),
+            "Madelyn is driving near Route 9, Springfield.",
+        )
+        self.assertEqual(
+            where("Sam", fix, None, None, "12 Main St, Springfield", now, self.zone),
+            "Sam is at 12 Main St, Springfield.",
+        )
+        old = dict(fix, at=self.at(10, 9, 5))
+        self.assertEqual(
+            where("Sam", old, "Work", None, None, now, self.zone),
+            "Sam was last seen at Work on Tuesday at 9:05 AM.",
+        )
+        self.assertIn("no address", where("Sam", fix, None, None, None, now, self.zone))
+
+
+class AmazonSignatureTests(unittest.TestCase):
+    """Only signed, recent requests from Amazon's certificate are accepted."""
+
+    def certificate(self, issuer_key, subject, key, issuer=None, ca=False, names=()):
+        now = datetime.datetime.now(datetime.UTC)
+        builder = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject)]))
+            .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, issuer or subject)]))
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=30))
+            .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+        )
+        builder = builder.add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False
+        ).add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()),
+            critical=False,
+        )
+        if ca:
+            builder = builder.add_extension(
+                x509.KeyUsage(False, False, False, False, False, True, True, False, False),
+                critical=True,
+            )
+        else:
+            builder = builder.add_extension(
+                x509.SubjectAlternativeName([x509.DNSName(n) for n in names]), critical=False
+            ).add_extension(
+                x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+            )
+        return builder.sign(issuer_key, hashes.SHA256())
+
+    def setUp(self):
+        alexa_verify._certificates.clear()
+        self.root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        self.root = self.certificate(self.root_key, "Test root", self.root_key, ca=True)
+        self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    def pem(self, names=("echo-api.amazon.com",)):
+        from cryptography.hazmat.primitives.serialization import Encoding
+
+        leaf = self.certificate(self.root_key, "echo", self.key, issuer="Test root", names=names)
+        return leaf.public_bytes(Encoding.PEM)
+
+    def key_for(self, pem):
+        store = alexa_verify.Store([self.root])
+        return lambda url: alexa_verify.signing_key(url, store=store, download=lambda u: pem)
+
+    def signed(self, body):
+        signature = self.key.sign(body, padding.PKCS1v15(), hashes.SHA256())
+        return {
+            "signaturecertchainurl": "https://s3.amazonaws.com/echo.api/echo-api-cert.pem",
+            "signature-256": base64.b64encode(signature).decode(),
+        }
+
+    def test_certificate_addresses(self):
+        good = "https://s3.amazonaws.com/echo.api/echo-api-cert.pem"
+        self.assertEqual(alexa_verify.certificate_url(good), good)
+        for bad in (
+            "http://s3.amazonaws.com/echo.api/echo-api-cert.pem",
+            "https://notamazon.com/echo.api/echo-api-cert.pem",
+            "https://s3.amazonaws.com/EcHo.aPi/echo-api-cert.pem",
+            "https://s3.amazonaws.com/invalid.path/echo-api-cert.pem",
+            "https://s3.amazonaws.com:563/echo.api/echo-api-cert.pem",
+            "https://s3.amazonaws.com/echo.api/../invalid.path/cert.pem",
+        ):
+            with self.assertRaises(alexa_verify.NotFromAmazon, msg=bad):
+                alexa_verify.certificate_url(bad)
+
+    def test_signatures_and_timestamps(self):
+        stamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        request = {"request": {"timestamp": stamp}}
+        body = json.dumps(request).encode()
+        key_for = self.key_for(self.pem())
+        alexa_verify.check(self.signed(body), body, request, key_for=key_for)
+        with self.assertRaises(alexa_verify.NotFromAmazon):
+            alexa_verify.check(self.signed(body), body + b" ", request, key_for=key_for)
+        with self.assertRaises(alexa_verify.NotFromAmazon):
+            alexa_verify.check(
+                self.signed(body), body, request, now=time.time() + 600, key_for=key_for
+            )
+        with self.assertRaises(alexa_verify.NotFromAmazon):
+            alexa_verify.check({}, body, request, key_for=key_for)
+        alexa_verify._certificates.clear()
+        with self.assertRaises(alexa_verify.NotFromAmazon):
+            alexa_verify.check(
+                self.signed(body), body, request, key_for=self.key_for(self.pem(("evil.com",)))
+            )

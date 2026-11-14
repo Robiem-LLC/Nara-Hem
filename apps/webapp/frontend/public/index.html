@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nära Hem · Server setup</title>
+    <link rel="icon" type="image/png" href="/app-icon.png" />
+    <link rel="apple-touch-icon" href="/app-icon.png" />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/leaflet.css" />
+    <script src="/client.js" defer></script>
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <h1>
+            <img
+              class="wordmark"
+              src="/nara-hem-wordmark.png"
+              alt="NÄRA HEM"
+              width="276"
+              height="56"
+            />
+          </h1>
+          <p class="eyebrow">YOUR HOME. YOUR DATA.</p>
+        </div>
+        <button id="logout" hidden>Sign out</button>
+      </header>
+      <div id="message" role="status" aria-live="polite"></div>
+      <nav id="app-nav" hidden>
+        <button id="open-map">Household map</button
+        ><button id="open-trips" class="secondary">Trips</button
+        ><button id="open-places" class="secondary">Places</button
+        ><button id="open-household" class="secondary">Manage household</button
+        ><button id="open-settings" class="secondary">Admin settings</button>
+      </nav>
+      <div
+        id="device-request-alert"
+        class="device-request-alert"
+        role="status"
+        aria-live="polite"
+        hidden
+      >
+        <span id="device-request-count"></span>
+        <button id="review-device-requests" class="secondary">Review requests</button>
+      </div>
+      <div id="view"><p>Connecting to your server…</p></div>
+      <footer>
+        Your server stores encrypted household data. Background tracking requires a native phone
+        app. <span id="server-version"></span>
+      </footer>
+    </main>
+
+    <!--
+      Screens and cards that app.js shows inside #view. A <template> is not displayed;
+      app.js copies it in with showTemplate(), then fills the data-slot elements.
+    -->
+    <!-- First run: create the household and administrator. -->
+    <template id="screen-setup"
+      ><section class="card">
+        <p class="eyebrow">01 / CREATE YOUR HOUSEHOLD</p>
+        <h2>Make this server yours.</h2>
+        <p class="subtle">
+          Enter the setup token printed in the server's container logs on first boot. If the log has
+          rotated, retrieve it with the command below.
+        </p>
+        <code>docker compose exec narahem python manage.py bootstrap-token</code>
+        <form id="setup">
+          <label for="token">Setup token</label>
+          <div class="secret-control">
+            <input
+              id="token"
+              name="token"
+              type="password"
+              required
+              minlength="8"
+              maxlength="256"
+              autocomplete="off"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Setup token"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <label for="household">Household name</label
+          ><input id="household" name="household" type="text" required maxlength="80" /><label
+            for="email"
+            >Administrator email</label
+          ><input id="email" name="email" type="email" required autocomplete="email" /><label
+            for="password"
+            >Administrator password · at least 15 characters</label
+          >
+          <div class="secret-control">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              minlength="15"
+              maxlength="128"
+              autocomplete="new-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Administrator password · at least 15 characters"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <label for="confirm_password">Confirm administrator password</label>
+          <div class="secret-control">
+            <input
+              id="confirm_password"
+              name="confirm_password"
+              type="password"
+              required
+              minlength="15"
+              maxlength="128"
+              autocomplete="new-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Confirm administrator password"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <button type="submit">Create household</button>
+        </form>
+      </section></template
+    >
+    <!-- Sign in, password reset request and invitation resend. -->
+    <template id="screen-login"
+      ><section class="card">
+        <h2>Welcome home.</h2>
+        <p class="subtle">Sign in to manage your server.</p>
+        <form id="login">
+          <label for="email">Email</label
+          ><input id="email" name="email" type="email" required autocomplete="username" /><label
+            for="password"
+            >Password</label
+          >
+          <div class="secret-control">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              autocomplete="current-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Password"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <button type="submit">Sign in</button>
+        </form>
+        <button type="button" id="forgot-toggle" class="secondary">Forgot password?</button>
+        <form id="forgot" hidden>
+          <label for="recovery_email">Recovery email</label
+          ><input
+            id="recovery_email"
+            name="recovery_email"
+            type="email"
+            required
+            autocomplete="email"
+          /><button type="submit">Send password reset link</button>
+        </form>
+      </section>
+      <section class="card">
+        <h3>Already invited?</h3>
+        <p class="subtle">
+          Use your invitation email link to verify your account and choose a password. No second
+          administrator approval is needed.
+        </p>
+        <form id="request">
+          <label for="invite_email">Invited email</label
+          ><input id="invite_email" name="invite_email" type="email" required /><button
+            class="secondary"
+            type="submit"
+          >
+            Resend invitation link
+          </button>
+        </form>
+      </section></template
+    >
+    <!-- Email confirmation from an invitation link. -->
+    <template id="screen-verify"
+      ><section class="card">
+        <h2>Confirm your email.</h2>
+        <p class="subtle">
+          New members: choose a display username and confirm your password. Your email is your login
+          and recovery address. Existing administrator: leave these fields blank to confirm your
+          email.
+        </p>
+        <form id="verify">
+          <label for="invited_email">Invited email address</label
+          ><input id="invited_email" name="invited_email" type="email" readonly /><label
+            for="username"
+            >Display username (new members only)</label
+          ><input
+            id="username"
+            name="username"
+            type="text"
+            minlength="3"
+            maxlength="64"
+            autocomplete="nickname"
+          /><label for="password">Password (new members only)</label>
+          <div class="secret-control">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              minlength="15"
+              maxlength="128"
+              autocomplete="new-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Password (new members only)"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <label for="confirm_password">Confirm password (new members only)</label>
+          <div class="secret-control">
+            <input
+              id="confirm_password"
+              name="confirm_password"
+              type="password"
+              minlength="15"
+              maxlength="128"
+              autocomplete="new-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Confirm password (new members only)"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <button type="submit">Confirm email</button>
+        </form>
+      </section></template
+    >
+    <!-- Password reset from an emailed link. -->
+    <template id="screen-reset-password"
+      ><section class="card">
+        <h2>Reset your password</h2>
+        <p class="subtle">Choose a new password. Existing sign-in sessions will be revoked.</p>
+        <form id="reset-password">
+          <label for="new_password">New password · at least 15 characters</label>
+          <div class="secret-control">
+            <input
+              id="new_password"
+              name="new_password"
+              type="password"
+              required
+              minlength="15"
+              maxlength="128"
+              autocomplete="new-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show New password · at least 15 characters"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <label for="confirm_password">Confirm new password</label>
+          <div class="secret-control">
+            <input
+              id="confirm_password"
+              name="confirm_password"
+              type="password"
+              required
+              minlength="15"
+              maxlength="128"
+              autocomplete="new-password"
+            /><button
+              type="button"
+              class="secondary secret-toggle"
+              aria-label="Show Confirm new password"
+              aria-pressed="false"
+            >
+              Show
+            </button>
+          </div>
+          <button type="submit">Change password</button>
+        </form>
+      </section></template
+    >
+    <!-- Admin settings (administrators only). -->
+    <template id="screen-admin-settings"
+      ><section class="card">
+        <p class="eyebrow">YOUR SERVER</p>
+        <h2>Admin settings</h2>
+        <h3 data-slot="household"></h3>
+        <p><code data-slot="public-url"></code></p>
+        <span class="pill ok">Database connected</span
+        ><span class="pill" data-slot="mail-status"></span
+        ><span class="pill ok" data-slot="email-confirmed">Account email confirmed</span>
+        <p class="subtle" data-slot="email-unconfirmed">
+          Optional: confirm your administrator email to enable email-based verification workflows.
+          The Docker device token is enough for your first browser.
+        </p>
+        <button id="confirm-owner" class="secondary" data-slot="email-unconfirmed">
+          Confirm administrator email
+        </button>
+      </section>
+      <div class="grid" id="admin-settings-grid">
+        <section class="card">
+          <h2>Email</h2>
+          <p class="subtle">
+            Your server sends invitations, sign-in codes and password resets from this address.
+          </p>
+          <form id="mail">
+            <label for="sender">Email address</label
+            ><input id="sender" name="sender" type="email" autocomplete="email" required /><label
+              for="provider"
+              >Email provider</label
+            ><select id="provider"></select>
+            <div id="mail-help" class="mail-help" aria-live="polite"></div>
+            <div id="mail-password-field">
+              <label for="password" id="mail-password-label"
+                >App password · blank keeps saved password</label
+              >
+              <div class="secret-control">
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autocomplete="new-password"
+                /><button
+                  type="button"
+                  class="secondary secret-toggle"
+                  aria-label="Show app password"
+                  aria-pressed="false"
+                >
+                  Show
+                </button>
+              </div>
+            </div>
+            <details id="mail-advanced">
+              <summary>Advanced: server details</summary>
+              <label for="host">SMTP server</label
+              ><input id="host" name="host" type="text" required /><label for="port">Port</label
+              ><input
+                id="port"
+                name="port"
+                type="number"
+                required
+                min="1"
+                max="65535"
+                value="587"
+              /><label for="mode">Encryption</label
+              ><select id="mode" name="mode">
+                <option value="starttls">STARTTLS (usually 587)</option>
+                <option value="tls">TLS (usually 465)</option></select
+              ><label for="username">SMTP username</label
+              ><input id="username" name="username" type="text" />
+            </details>
+            <button type="submit" id="save-mail">Save email settings</button>
+          </form>
+          <div class="links">
+            <button id="test-mail" class="secondary">Send test to me</button
+            ><button id="retry-mail" class="secondary">Retry queued mail</button>
+          </div>
+        </section>
+        <section class="card" id="texting-card">
+          <h2>Text messages</h2>
+          <p class="subtle">
+            With a
+            <a href="https://textbelt.com" target="_blank" rel="noopener noreferrer">Textbelt</a>
+            key, your server can invite people by phone number and text them sign-in codes and reset
+            links. Without one it uses email only. Phone numbers, codes and links pass through
+            Textbelt.
+          </p>
+          <p><span class="pill" id="texting-status"></span></p>
+          <form id="texting">
+            <label for="texting-key">Textbelt key</label>
+            <div class="secret-control">
+              <input
+                id="texting-key"
+                name="key"
+                type="password"
+                autocomplete="off"
+                required
+              /><button
+                type="button"
+                class="secondary secret-toggle"
+                aria-label="Show Textbelt key"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+            <p class="subtle" id="texting-source" hidden></p>
+            <button type="submit" id="save-texting">Save key</button>
+          </form>
+          <div class="links">
+            <button id="check-texting" class="secondary">Check key</button
+            ><button id="remove-texting" class="secondary" hidden>Remove key</button>
+          </div>
+          <form id="texting-test">
+            <label for="texting-test-phone">Send a test text to</label
+            ><input id="texting-test-phone" name="phone" type="tel" required /><button
+              type="submit"
+              class="secondary"
+            >
+              Send test text
+            </button>
+          </form>
+          <p class="subtle">
+            Textbelt only sends links once they are allowed for your key. The test text includes
+            your server's address, so it shows whether links work.
+          </p>
+        </section>
+        <section class="card" id="relays-card">
+          <h2>Push notifications</h2>
+          <p class="subtle">
+            Your server sends notifications and Find my phone rings through these relays. It signs
+            up with each one by itself.
+          </p>
+          <ul id="relay-list" class="relay-list"></ul>
+          <div class="links">
+            <button id="register-relays" class="secondary">Register now</button>
+          </div>
+        </section>
+        <section class="card" id="alexa-card">
+          <h2>Alexa</h2>
+          <p class="subtle">
+            Ask an Echo where someone is, or to ring their phone. Alexa signs in with this
+            administrator account and can be unlinked here at any time; changing the administrator
+            password unlinks it too. What Alexa says passes through Amazon.
+          </p>
+          <p><span class="pill" id="alexa-status"></span></p>
+          <ul id="alexa-links" class="relay-list"></ul>
+          <p class="subtle" id="alexa-store" hidden>
+            Use the Nära Hem skill from the Alexa store: in the Alexa app, enable
+            <strong>Nära Hem</strong>, enter this server's address,
+            <strong data-slot="alexa-address"></strong>, and sign in as the administrator.
+          </p>
+          <details id="alexa-own">
+            <summary>Your own private skill</summary>
+            <form id="alexa-skill">
+              <label for="alexa-skill-id">Skill ID</label
+              ><input
+                id="alexa-skill-id"
+                name="skill_id"
+                type="text"
+                autocomplete="off"
+                placeholder="amzn1.ask.skill.…"
+                required
+              /><button type="submit">Save skill ID</button>
+            </form>
+            <p class="subtle">Paste these into your skill in the Alexa developer console:</p>
+            <label for="alexa-endpoint">Endpoint (HTTPS)</label
+            ><input id="alexa-endpoint" type="text" readonly /><label for="alexa-authorization"
+              >Web Authorization URI</label
+            ><input id="alexa-authorization" type="text" readonly /><label for="alexa-token"
+              >Access Token URI</label
+            ><input id="alexa-token" type="text" readonly /><label for="alexa-client-id"
+              >Your Client ID</label
+            ><input id="alexa-client-id" type="text" readonly /><label for="alexa-client-secret"
+              >Your Secret</label
+            >
+            <div class="secret-control">
+              <input id="alexa-client-secret" type="password" readonly /><button
+                type="button"
+                class="secondary secret-toggle"
+                aria-label="Show Your Secret"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+            <div class="links">
+              <button id="alexa-new-secret" class="secondary">New secret</button>
+            </div>
+          </details>
+        </section>
+        <section class="card">
+          <h2>Administrator password</h2>
+          <p class="subtle">
+            Other browser sessions and remembered phone sign-ins will be revoked. This browser stays
+            signed in.
+          </p>
+          <form id="change-password">
+            <label for="current_password">Current password</label>
+            <div class="secret-control">
+              <input
+                id="current_password"
+                name="current_password"
+                type="password"
+                required
+                autocomplete="current-password"
+              /><button
+                type="button"
+                class="secondary secret-toggle"
+                aria-label="Show Current password"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+            <label for="new_password">New password · 15 or more characters</label>
+            <div class="secret-control">
+              <input
+                id="new_password"
+                name="new_password"
+                type="password"
+                required
+                minlength="15"
+                maxlength="128"
+                autocomplete="new-password"
+              /><button
+                type="button"
+                class="secondary secret-toggle"
+                aria-label="Show New password · 15 or more characters"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+            <label for="repeat_password">Confirm new password</label>
+            <div class="secret-control">
+              <input
+                id="repeat_password"
+                name="repeat_password"
+                type="password"
+                required
+                minlength="15"
+                maxlength="128"
+                autocomplete="new-password"
+              /><button
+                type="button"
+                class="secondary secret-toggle"
+                aria-label="Show Confirm new password"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+            <button type="submit">Change password</button>
+          </form>
+        </section>
+      </div></template
+    >
+    <!-- Storage, retention and diagnostics card inside Admin settings. -->
+    <template id="card-storage"
+      ><h3>Storage and retention</h3>
+      <p id="storage-summary"></p>
+      <p class="subtle">
+        Locations and events expire by capture time. Saved places/profiles persist until replaced or
+        deleted. Existing backups need their own expiration policy.
+      </p>
+      <form id="retention">
+        <label for="days">History retention (days, maximum 14)</label
+        ><input id="days" name="days" type="number" min="1" max="14" required /><button
+          type="submit"
+        >
+          Save retention
+        </button>
+      </form>
+      <button id="cleanup-storage" class="secondary">Clean expired data now</button>
+      <div class="settings-diagnostic-export">
+        <h4>Download redacted diagnostics</h4>
+        <p class="subtle">
+          Download GPS capture and server receipt timestamps directly to this computer. No SMB
+          access, Docker console or encryption keys required.
+        </p>
+        <div class="links">
+          <label for="diagnostic-kind">Report</label
+          ><select id="diagnostic-kind">
+            <option value="gps">GPS and uploads</option>
+            <option value="trips">Trips</option>
+            <option value="server">Server</option>
+            <option value="notifications">Notifications</option></select
+          ><label for="diagnostic-hours">Window</label
+          ><select id="diagnostic-hours">
+            <option value="3">Last 3 hours</option>
+            <option value="24">Last 24 hours</option>
+            <option value="168">Last 7 days</option></select
+          ><button type="button" id="download-diagnostics" class="secondary">
+            Download report
+          </button>
+        </div>
+        <button type="button" id="export-diagnostics" class="secondary" hidden>
+          Save to exports folder
+        </button>
+        <p class="subtle" id="diagnostic-export-note" hidden>
+          Saved reports appear in the folder mounted at <code>/exports</code>, readable from your
+          file share.
+        </p>
+        <p class="subtle">Console command: <code>python manage.py diagnostics</code>.</p>
+      </div></template
+    >
+    <!-- A member's own display username editor. -->
+    <template id="card-username"
+      ><h3>My username</h3>
+      <p class="subtle">
+        Your email remains your login. Your username is the name other household members see.
+      </p>
+      <form id="my-username">
+        <label for="new_username">Display username</label
+        ><input
+          id="new_username"
+          name="new_username"
+          type="text"
+          required
+          minlength="3"
+          maxlength="64"
+          autocomplete="nickname"
+        /><button type="submit">Save username</button>
+      </form></template
+    >
+    <!-- Manage household. The invite form is for administrators only. -->
+    <template id="screen-household"
+      ><section class="card">
+        <h2>Manage household</h2>
+        <form id="invite" data-slot="admin-only">
+          <label for="email">Member email</label
+          ><input id="email" name="email" type="email" required />
+          <div id="invite-phone-field" hidden>
+            <label for="invite-phone">Also text the invitation to (optional)</label
+            ><input id="invite-phone" name="phone" type="tel" autocomplete="off" />
+          </div>
+          <button type="submit">Send invitation</button>
+        </form>
+        <div id="members"></div>
+      </section>
+      <div id="crypto-tools"></div
+    ></template>
+    <!-- Screens that the encrypted client (src/client/*.mjs) shows inside #view. -->
+    <!-- Trips when this browser has no approved location access. -->
+    <template id="screen-trips-locked"
+      ><section class="card">
+        <h2>Trips</h2>
+        <p>
+          This browser needs approved location access to show trips. Open Manage household to enable
+          or approve it.
+        </p>
+      </section></template
+    >
+    <!-- Browser location access. Exactly one data-slot variant is kept (plus "forget" when a vault is saved). -->
+    <template id="screen-browser-access"
+      ><section class="card">
+        <h3>Browser location access</h3>
+        <p>
+          Private device keys stay on this browser. Enable it once on a private browser; signing in
+          will reopen the map automatically.
+        </p>
+        <p data-slot="https-required">
+          Encrypted access requires HTTPS (or localhost for testing).
+        </p>
+        <p data-slot="migrate">
+          This older browser vault needs its existing passphrase once to migrate.
+        </p>
+        <form id="vault-form" data-slot="migrate">
+          <label for="vault-password">Existing browser-vault passphrase</label
+          ><input
+            id="vault-password"
+            name="vault-password"
+            type="password"
+            required
+            autocomplete="current-password"
+          /><button>Remember this browser</button>
+        </form>
+        <p data-slot="missing">
+          Remembered browser access needs attention. Sign in again, restore this browser profile, or
+          forget this device and enroll again.
+        </p>
+        <button id="enable-browser" data-slot="enable">Enable this browser</button
+        ><button id="forget-vault" class="danger" data-slot="forget">
+          Forget this browser device
+        </button>
+      </section></template
+    >
+    <!-- Household map with nothing to show yet; the message is filled in. -->
+    <template id="screen-empty-map"
+      ><section class="card map-card">
+        <h2>Household map</h2>
+        <div id="household-map" aria-label="Household location map"></div>
+        <p id="empty-map-message"></p>
+        <p class="subtle">The map provider receives the region you view.</p>
+      </section></template
+    >
+    <!-- Trust the first administrator browser with Docker's device bootstrap token. -->
+    <template id="screen-first-device"
+      ><section class="card">
+        <h2>Approve your first device.</h2>
+        <p>
+          Use the device bootstrap token from Docker to trust your first administrator browser.
+          Email confirmation is not required for this local step.
+        </p>
+        <code>docker compose exec narahem python manage.py device-bootstrap-token</code>
+        <form id="bootstrap-device">
+          <label for="bootstrap-device-token">Device bootstrap token</label
+          ><input
+            id="bootstrap-device-token"
+            name="bootstrap-device-token"
+            type="password"
+            required
+            autocomplete="off"
+          /><button>Trust this first device</button>
+        </form>
+        <details>
+          <summary>Alternative: email confirmation code</summary>
+          <p class="subtle">
+            If your admin email is configured and verified, request a six-digit code instead.
+          </p>
+          <button id="request-first-device-code" class="secondary">
+            Email me a six-digit code
+          </button>
+          <form id="email-bootstrap">
+            <label for="device-email-code">Six-digit email code</label
+            ><input
+              id="device-email-code"
+              name="device-email-code"
+              type="text"
+              required
+              inputmode="numeric"
+              pattern="[0-9]{6}"
+              maxlength="6"
+              autocomplete="one-time-code"
+            /><button>Trust this browser</button>
+          </form>
+        </details>
+      </section></template
+    >
+    <!-- Approve this browser from an existing trusted device. -->
+    <template id="screen-pairing"
+      ><section class="card">
+        <h2>Approve this device</h2>
+        <p>
+          On an existing trusted device, open <strong>Manage household → Device access</strong>,
+          compare this six-digit code, and tap Approve. No fingerprints need to be copied.
+        </p>
+        <p class="subtle">Code shown on this device</p>
+        <p id="pairing-code" class="pairing-code" aria-label="Pairing code"></p>
+        <p id="pairing-status" role="status"></p>
+        <button id="check-approval">Check approval</button>
+        <details>
+          <summary>Advanced recovery for older approvals</summary>
+          <p>
+            Old approvals without a signed pairing commitment require a separately verified owner
+            fingerprint.
+          </p>
+          <form id="trust-root">
+            <label for="root-fingerprint">Owner household fingerprint</label
+            ><input
+              id="root-fingerprint"
+              name="root-fingerprint"
+              type="text"
+              required
+              pattern="[a-f0-9]{64}"
+              maxlength="64"
+            /><button>Verify household manually</button>
+          </form>
+        </details>
+      </section></template
+    >
+    <!-- Waiting for another device to approve this browser. -->
+    <template id="screen-waiting-approval"
+      ><section class="card">
+        <h2>Waiting for trusted approval.</h2>
+        <button id="check-approval">Check approval</button>
+      </section></template
+    >
+    <!-- Household map, saved places and browser access. Provider names are filled in. -->
+    <template id="screen-household-map"
+      ><section class="card map-card" data-client-pane="map">
+        <h2>Household map</h2>
+        <p class="subtle">
+          Parked phones check in about every 15 minutes; fixes older than 20 minutes are stale.
+        </p>
+        <p id="map-status" role="status"></p>
+        <div id="household-map" aria-label="Household location map"></div>
+        <button id="load-tiles" class="secondary" data-slot="load-tiles"></button
+        ><button id="fallback-map" class="secondary" hidden>Use OpenStreetMap instead</button>
+        <p id="map-provider-note" class="subtle">
+          The map sends the viewed region to <span data-slot="provider-name"></span>. Exact GPS
+          points are sent for street address lookup only with your permission.
+        </p>
+        <p class="subtle">
+          Street addresses: <span id="address-provider-status"></span> ·
+          <button type="button" class="secondary inline-control" id="address-privacy-toggle">
+            Change address privacy
+          </button>
+        </p>
+        <div id="location-list"></div>
+        <div class="links">
+          <button id="refresh-map">Refresh updates</button
+          ><button id="fit-users" class="secondary">Show everyone</button>
+        </div>
+      </section>
+      <div data-client-pane="tools">
+        <section class="card" id="saved-places">
+          <h3>Saved places</h3>
+          <p>
+            Existing household places appear first. Select Edit boundary to change one; the small
+            previews are read-only.
+          </p>
+          <div id="place-list" class="place-cards"></div>
+          <p id="places-status" class="subtle" role="status"></p>
+          <button type="button" id="add-place">Add a place</button>
+          <div id="place-editor" hidden>
+            <h4 id="place-editor-heading">Add a place</h4>
+            <form id="place-form">
+              <label for="place-name">Place name</label
+              ><input id="place-name" name="place-name" type="text" required maxlength="80" /><label
+                for="place-address"
+                >Find an address or landmark</label
+              >
+              <div class="place-search-line">
+                <input
+                  id="place-address"
+                  type="text"
+                  placeholder="Street address, city or landmark"
+                  autocomplete="street-address"
+                /><button type="button" class="secondary" id="find-place-address">
+                  Find address
+                </button>
+              </div>
+              <button type="button" class="secondary" id="find-place-osm" hidden>
+                Search with OpenStreetMap instead
+              </button>
+              <p class="subtle">
+                Search sends the entered address directly to
+                <span data-slot="provider-name"></span>, not to your Nära Hem server. Confirm the
+                pin before saving.
+              </p>
+              <p id="place-address-status" role="status"></p>
+              <div
+                id="place-preview"
+                role="img"
+                aria-label="Map showing the selected place and its radius"
+              ></div>
+              <p class="subtle">Click the preview map to move the center of this place.</p>
+              <label for="place-radius">Radius (metres)</label
+              ><input
+                id="place-radius"
+                name="place-radius"
+                type="number"
+                required
+                min="1"
+                max="10000"
+                step="1"
+                value="100"
+              /><input
+                id="place-radius-slider"
+                type="range"
+                min="1"
+                max="2000"
+                step="1"
+                value="100"
+                aria-label="Adjust place radius"
+              />
+              <details>
+                <summary>Advanced: exact GPS coordinates</summary>
+                <label for="place-lat">Place latitude</label
+                ><input
+                  id="place-lat"
+                  name="place-lat"
+                  type="number"
+                  required
+                  min="-90"
+                  max="90"
+                  step="any"
+                /><label for="place-lon">Place longitude</label
+                ><input
+                  id="place-lon"
+                  name="place-lon"
+                  type="number"
+                  required
+                  min="-180"
+                  max="180"
+                  step="any"
+                />
+              </details>
+              <button id="place-save-button">Save place</button
+              ><button type="button" id="cancel-place-edit" class="secondary">Cancel</button>
+            </form>
+          </div>
+        </section>
+        <section class="card" id="browser-access">
+          <h3>Browser location access</h3>
+          <p class="subtle">
+            Approve and manage browser identities here. Phones register by email and are revoked
+            only from Manage Household.
+          </p>
+          <div id="pending-browser-approvals"></div>
+          <div id="browser-access-devices"></div>
+          <div id="membership-repair"></div>
+        </section>
+        <details class="card">
+          <summary>Device access (reference)</summary>
+          <p class="subtle">
+            Read-only record of connected devices. Revoke phones from their member cards in Manage
+            Household.
+          </p>
+          <div id="device-list"></div>
+        </details></div
+    ></template>
+    <!-- Trips and stops. -->
+    <template id="screen-trips"
+      ><section class="card">
+        <h2>Trips and stops</h2>
+        <form id="trip-filters" class="trip-filters">
+          <label>Household member<select name="member"></select></label
+          ><label
+            >History<select name="days">
+              <option value="1">Past day</option>
+              <option value="7">Past week</option>
+              <option value="14">Past two weeks</option>
+            </select></label
+          ><button type="submit">Refresh</button
+          ><label class="trip-preview-toggle"
+            ><input type="checkbox" name="previews" /> Map backgrounds</label
+          >
+        </form>
+        <p class="subtle">
+          Address labels use the selected map provider when enabled in Household Map's address
+          privacy setting.
+        </p>
+        <p class="subtle">
+          Maps show the recorded path. Gaps remain unconnected. Map providers receive the viewed
+          region. Stops show observed stationary time only.
+        </p>
+        <p id="trip-status" role="status"></p>
+        <p id="trip-processing-status" role="status"></p>
+        <p id="trip-history-status" role="status"></p>
+        <div id="trip-list"></div>
+        <p id="trip-more-status" class="subtle"></p></section
+    ></template>
+    <!-- Household map when location access is unavailable. -->
+    <template id="screen-location-unavailable"
+      ><section class="card">
+        <h2>Household map</h2>
+        <p>
+          Location access is unavailable. Sign in again or check Browser location access in Manage
+          household.
+        </p>
+      </section></template
+    >
+  </body>
+</html>

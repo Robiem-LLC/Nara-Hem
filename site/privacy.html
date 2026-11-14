@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}} privacy policy</title>
+    <meta name="description" content="How {{name}} handles your data." />
+    <meta name="theme-color" content="#0b1019" />
+    <link rel="icon" href="icon-64.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="index.html"
+        ><img src="icon-256.png" alt="" width="36" height="36" />{{name}}</a
+      >
+      <nav>
+        <a href="index.html">Demo</a><a href="setup.html">Install</a
+        ><a href="{{github}}" class="button small">GitHub</a>
+      </nav>
+    </header>
+    <main>
+      <article class="policy">
+        <p class="eyebrow">Privacy policy</p>
+        <h1>{{name}} keeps your family's data on your server</h1>
+        <p>
+          This policy covers the {{name}} apps for iPhone and Android, the {{name}} server and web
+          app, the Alexa skill, and the notification and Alexa relays operated by {{publisher}}.
+        </p>
+
+        <h2>Where your data lives</h2>
+        <p>
+          {{name}} connects to a server that you or your household run. Your account, your
+          household's members, locations, trips, places and alerts are stored only on that server.
+          {{publisher}} does not run your server and has no access to it.
+        </p>
+
+        <h2>Encryption</h2>
+        <p>
+          Locations, trips, places and profile photos are encrypted on the device that creates them.
+          Each record is sealed separately for every device allowed to see it and for your
+          household's server, which keeps a copy so it can deliver records to devices approved
+          later. Every device signs what it sends. Connections to your server use HTTPS. No one
+          outside your household, including {{publisher}}, can read these records.
+        </p>
+
+        <h2>What the apps collect</h2>
+        <ul>
+          <li>
+            <strong>Location</strong>, including in the background, so your household can see where
+            you are and record trips. You choose who in the household can see it.
+          </li>
+          <li>
+            <strong>Battery level</strong>, so others can be warned before your phone runs out.
+          </li>
+          <li>
+            <strong>Your name, email address and an optional photo</strong>, shared with your
+            household on your server.
+          </li>
+        </ul>
+        <p>
+          The apps contain no advertising, no analytics and no third-party tracking. {{publisher}}
+          never receives your location.
+        </p>
+
+        <h2>Notifications</h2>
+        <p>
+          To deliver notifications, your server sends a request through a relay operated by
+          {{publisher}}, which passes it to Apple Push Notification service or Firebase Cloud
+          Messaging. These requests contain a device push token and a generic message ("A household
+          update is available"); they never contain locations, names or alert details, which the app
+          fetches from your server after it wakes up. The relays keep a hash of each server's relay
+          key, the IP address it registered from and the dates it was created and last used, for up
+          to 90 days after last use, to prevent abuse. They do not store the notifications
+          themselves.
+        </p>
+
+        <h2>Alexa</h2>
+        <p>
+          Alexa is off unless your household's administrator turns it on and links it. Then anyone
+          talking to that Echo can ask where household members are or ring their phone. To answer,
+          your server sends the answer (for example "Maya is at Home") back through Amazon, under
+          Amazon's privacy policy. With the {{name}} skill from the Alexa store, requests and
+          answers also pass through a relay operated by {{publisher}}, which forwards them between
+          Amazon and your server without storing or logging them. The relay keeps no database: your
+          server's address is sealed inside the sign-in tokens Amazon holds. Your administrator can
+          unlink Alexa on your server at any time.
+        </p>
+
+        <h2>Maps</h2>
+        <p>
+          Map images are loaded from OpenStreetMap, or from Google Maps if your server's
+          administrator enables it. Those services receive the map area being displayed and your IP
+          address under their own privacy policies.
+        </p>
+
+        <h2>Deleting your data</h2>
+        <p>
+          Your data is controlled by your household administrator, who runs your household's server
+          and can remove your account or delete the server entirely. Deleting the app removes its
+          keys from your phone. Contact your household administrator for any request about your
+          data; {{publisher}} holds none of it.
+        </p>
+
+        <h2>Children</h2>
+        <p>
+          {{name}} is intended to be set up by adults for their own households. A household
+          administrator is responsible for anyone they add.
+        </p>
+
+        <h2>Contact</h2>
+        <p>Questions about this policy: <a href="mailto:{{contact}}">{{contact}}</a>.</p>
+        <p class="subtle">Last updated {{updated}}.</p>
+      </article>
+    </main>
+    <footer>
+      <p>
+        {{name}} by {{publisher}} · <a href="index.html">Home</a> ·
+        <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+      </p>
+    </footer>
+  </body>
+</html>

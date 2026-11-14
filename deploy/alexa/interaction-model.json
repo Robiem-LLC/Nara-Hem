@@ -1,0 +1,44 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "nara home",
+      "intents": [
+        {
+          "name": "WhereIsIntent",
+          "slots": [{ "name": "person", "type": "AMAZON.FirstName" }],
+          "samples": [
+            "where is {person}",
+            "where's {person}",
+            "where {person} is",
+            "where {person} is right now",
+            "where is {person} right now",
+            "locate {person}",
+            "is {person} home",
+            "for {person}"
+          ]
+        },
+        {
+          "name": "FindPhoneIntent",
+          "slots": [{ "name": "person", "type": "AMAZON.FirstName" }],
+          "samples": [
+            "find {person} phone",
+            "to find {person} phone",
+            "ring {person} phone",
+            "to ring {person} phone",
+            "ring {person}",
+            "to ring {person}",
+            "where is {person} phone"
+          ]
+        },
+        { "name": "AMAZON.YesIntent", "samples": [] },
+        { "name": "AMAZON.NoIntent", "samples": [] },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] }
+      ],
+      "types": []
+    }
+  }
+}

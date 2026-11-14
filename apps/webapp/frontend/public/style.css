@@ -1,0 +1,1774 @@
+:root {
+  /* Theme: every colour in the web app. Change a value here and it changes everywhere.
+     Same names and order as the Android and iOS theme files. */
+  --accent: #ffc35a;
+  --accent-text: #ffd27a;
+  --on-accent: #2a1a05;
+  --text: #f6efe3;
+  --text-label: #c4cee8;
+  --text-subdued: #aebbdd;
+  --background: #06143a;
+  --glow-top: #143c95;
+  --glow-middle: #0a2160;
+  --glow-bottom: #040d28;
+  --panel: #0c1d4d;
+  --panel-raised: #0f2459;
+  --panel-sunken: #081639;
+  --chip: #1a3170;
+  --chip-hover: #24407f;
+  --line: #1e3a7a;
+  --line-strong: #2d4c8f;
+  --overlay: rgba(6, 20, 58, 0.6);
+  --backdrop: rgba(2, 8, 24, 0.75);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --white: #fff;
+  --map-ink: #17212b;
+  --label-background: rgba(8, 22, 57, 0.85);
+  --place: #ffc35a;
+  --route: #ffc35a;
+  --route-casing: #081639;
+  --trip-start: #22c55e;
+  --trip-end: #ef4444;
+  --ok-background: #1b3e31;
+  --ok-line: #4e8d6b;
+  --warn-background: #3d2c0e;
+  --warn-line: #8b793e;
+  --warn-text: #ffdfa1;
+  --danger: #db5359;
+  --danger-background: #47282e;
+  --danger-line: #99545c;
+  --danger-text: #ffb8ba;
+  --info-background: #233c52;
+  --info-line: #426a8c;
+  --info-text: #bfe8ff;
+}
+:root {
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: radial-gradient(
+      120% 60% at 50% 0%,
+      var(--glow-top) 0%,
+      var(--glow-middle) 38%,
+      var(--background) 72%,
+      var(--glow-bottom) 100%
+    )
+    fixed var(--background);
+  color: var(--text);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1000px;
+  margin: 48px auto;
+  padding: 0 24px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+header h1 {
+  font-size: 26px;
+  margin: 0;
+  line-height: 0;
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wordmark {
+  display: block;
+  width: auto;
+  height: 56px;
+}
+header button {
+  margin-left: auto;
+}
+.mark {
+  width: 52px;
+  height: 52px;
+  flex: none;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--text-subdued);
+  margin: 0;
+}
+header .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 28px;
+  border-radius: 18px;
+  margin: 20px 0;
+}
+h2 {
+  margin-top: 0;
+  font-size: 23px;
+}
+h3 {
+  font-size: 16px;
+}
+.subtle,
+footer {
+  color: var(--text-subdued);
+  line-height: 1.6;
+}
+label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-label);
+  margin: 16px 0 7px;
+}
+input,
+select {
+  width: 100%;
+  padding: 12px;
+  background: var(--panel-sunken);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  font: inherit;
+}
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button {
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 9px;
+  padding: 11px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 16px;
+}
+button.secondary {
+  background: var(--chip);
+  color: var(--text);
+}
+button.danger {
+  background: var(--danger-background);
+  color: var(--danger-text);
+}
+button:disabled {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.pill {
+  display: inline-block;
+  border-radius: 99px;
+  background: var(--line);
+  padding: 5px 10px;
+  font-size: 12px;
+  margin: 3px;
+}
+.ok {
+  background: var(--ok-background);
+  color: var(--accent-text);
+}
+.warn {
+  background: var(--warn-background);
+  color: var(--warn-text);
+}
+#message:not([hidden]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-background);
+  border-radius: 10px;
+  margin: 20px 0;
+  white-space: pre-wrap;
+}
+#message > span,
+.action-toast > span {
+  flex: 1;
+}
+.action-toast > span::before {
+  content: attr(data-text);
+}
+button.message-close::before {
+  /* Drawn by CSS so the message's text is only the message. */
+  content: '×';
+}
+button.message-close {
+  flex: none;
+  margin: -4px -8px 0 0;
+  padding: 2px 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+/* A message next to the button that was just pressed. */
+.action-toast {
+  position: fixed;
+  z-index: 3000;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 10px 14px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-background);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px #0008;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+code {
+  overflow-wrap: anywhere;
+  color: var(--accent-text);
+}
+.member {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.member > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.member button {
+  margin: 0;
+}
+.member small {
+  display: block;
+  color: var(--text-subdued);
+}
+footer {
+  font-size: 12px;
+  margin-top: 36px;
+}
+.links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+a {
+  color: var(--accent-text);
+}
+form {
+  max-width: 650px;
+}
+.ready {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 5px 0;
+}
+.hidden,
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  main {
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .card {
+    padding: 20px;
+  }
+  header {
+    gap: 10px;
+  }
+  .wordmark {
+    height: 42px;
+  }
+  .eyebrow {
+    font-size: 9px;
+  }
+}
+
+nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  background: var(--panel-sunken);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 12px;
+  font: inherit;
+}
+.device-row {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.device-row code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+#household-map {
+  height: 400px;
+  border-radius: 12px;
+  background: var(--line);
+}
+.leaflet-container {
+  color: var(--map-ink);
+}
+.person-marker {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.map-person {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  background: transparent;
+  color: var(--white);
+  text-align: center;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.map-person img,
+.map-person-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--white);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.map-person-avatar {
+  display: grid;
+  place-items: center;
+  background: var(--chip);
+  color: var(--white);
+  font-size: 19px;
+  font-weight: 700;
+}
+.map-person-label {
+  display: block;
+  max-width: 96px;
+  background: var(--label-background);
+  color: var(--white);
+  border-radius: 8px;
+  padding: 2px 5px;
+  text-shadow: 0 1px 2px var(--shadow);
+  line-height: 1.15;
+}
+.person-marker.stale {
+  opacity: 1;
+}
+.person-marker.stale .map-person img,
+.person-marker.stale .map-person-avatar {
+  border: 4px solid var(--danger);
+  box-shadow:
+    0 0 0 2px var(--danger-line),
+    0 2px 8px var(--shadow);
+}
+@media (max-width: 700px) {
+  #household-map {
+    height: 300px;
+  }
+}
+
+.secret-control {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.secret-control input {
+  min-width: 0;
+  flex: 1;
+}
+.secret-control button {
+  flex: none;
+  margin: 0;
+}
+[aria-invalid='true'] {
+  border-color: var(--danger-text);
+}
+.field-error {
+  color: var(--danger-text);
+  margin: 0.4rem 0 1rem;
+}
+
+main {
+  max-width: 1300px;
+}
+.map-card {
+  padding: 16px;
+}
+#household-map {
+  height: 65vh;
+  min-height: 320px;
+}
+.member-card {
+  align-items: flex-start;
+}
+.member-info {
+  flex: 1;
+  min-width: 220px;
+}
+.member-info h3 {
+  margin: 0;
+}
+.member-info hr {
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+}
+.member-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--chip);
+  display: grid;
+  place-items: center;
+  font-weight: bold;
+  flex: none;
+}
+.member-photo img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.member-location {
+  font-size: 13px;
+  color: var(--text-subdued);
+}
+summary {
+  cursor: pointer;
+  padding: 16px;
+  font-weight: 700;
+}
+nav button[aria-current='page'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .member-info {
+    min-width: 160px;
+  }
+  nav button {
+    flex: 1;
+    padding: 10px;
+  }
+  header {
+    margin-bottom: 12px;
+  }
+}
+
+/* Short authentication string (SAS): easy to compare at arm's length. */
+.pairing-code {
+  display: block;
+  font-size: clamp(2.5rem, 8vw, 4rem);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-text);
+  overflow-wrap: normal;
+  margin: 10px 0 22px;
+}
+.device-row .pairing-code {
+  font-size: 2.3rem;
+}
+
+.device-request-alert {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: space-between;
+  background: var(--line);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin: 12px 0;
+  color: var(--text);
+}
+.device-request-alert button {
+  margin: 0;
+}
+.device-request-alert[hidden] {
+  display: none !important;
+}
+@media (max-width: 500px) {
+  .device-request-alert {
+    flex-wrap: wrap;
+  }
+}
+
+#logs-list details {
+  border-bottom: 1px solid var(--line-strong);
+}
+#logs-list details > div {
+  padding: 0 16px 16px;
+}
+#logs-list pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+#logs-filters label {
+  min-width: 0;
+}
+
+#logs-filters [hidden] {
+  display: none !important;
+}
+#logs-filters {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+#logs-filters label {
+  margin: 0;
+}
+#logs-filters button {
+  margin: 0;
+}
+
+.trip-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: end;
+}
+.trip-filters label {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.trip-filters label select {
+  margin: 0;
+}
+.trip-filters .trip-preview-toggle {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
+.trip-filters button {
+  margin: 0;
+}
+.trip-row {
+  margin: 12px 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+}
+.trip-row > div {
+  padding: 0 16px 16px;
+}
+.trip-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.trip-stats p {
+  margin: 4px 0;
+}
+.trip-gps-table {
+  overflow: auto;
+}
+.trip-gps-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.trip-gps-table td,
+.trip-gps-table th {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+
+.timeline-card {
+  padding: 0 0 1rem;
+  overflow: hidden;
+  margin: 1rem 0;
+  background: var(--panel-raised);
+  border: 1px solid var(--chip-hover);
+  border-radius: 20px;
+}
+.timeline-card h3,
+.timeline-card > p,
+.timeline-card > .trip-stats,
+.timeline-card > button {
+  margin: 1rem;
+}
+.trip-map {
+  height: 190px;
+  width: 100%;
+  background: var(--panel-sunken);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+}
+.trip-map-large {
+  height: min(65vh, 650px);
+  min-height: 280px;
+}
+.trip-dialog {
+  width: min(900px, 94vw);
+  max-height: 95vh;
+  overflow: auto;
+  color: inherit;
+  background: var(--panel-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+}
+.trip-dialog::backdrop {
+  background: var(--backdrop);
+}
+.trip-dialog > button {
+  float: right;
+}
+#trip-list {
+  max-width: 850px;
+  margin: auto;
+}
+.trip-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.6rem;
+}
+.trip-stats span {
+  background: var(--chip);
+  border-radius: 20px;
+  padding: 0.6rem;
+  text-align: center;
+}
+
+.timeline-card > .trip-map {
+  padding: 0;
+}
+
+/* Keep remote phone controls separate and the guidance readable at all widths. */
+.find-phone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 12px 0 0;
+}
+.find-phone-actions button {
+  margin: 0;
+}
+.find-phone-help {
+  display: block;
+  margin: 10px 0 12px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Household everyday controls versus destructive account administration. */
+#admin-settings-grid > .card {
+  margin: 0;
+}
+.member-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: start;
+}
+.member-card > .member-primary-actions {
+  grid-column: 3;
+  grid-row: 1;
+  align-items: center;
+  justify-content: flex-end;
+}
+.member-card > .member-destructive-actions {
+  grid-column: 2 / -1;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.member-phone-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.member-phone {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 430px;
+}
+.member-phone .find-phone-actions {
+  margin: 0;
+}
+.member-phone .find-phone-help {
+  display: block;
+  flex-basis: 100%;
+  margin: 2px 0;
+  font-size: 0.75rem;
+}
+.member-phone p {
+  font-size: 0.8rem;
+  margin: 0;
+  color: var(--text-subdued);
+}
+.member-phone small {
+  min-width: 60px;
+}
+.testing-panel {
+  padding: 0 16px 18px;
+}
+@media (max-width: 980px) {
+  .member-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 2;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
+  .member-card > .member-destructive-actions {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 500px) {
+  .member-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 1/-1;
+  }
+  .member-phone-controls {
+    width: 100%;
+  }
+  .member-card > .member-destructive-actions {
+    justify-content: flex-end;
+  }
+}
+
+.inline-control {
+  display: inline-block;
+  padding: 6px 10px;
+  margin: 0;
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+
+/* Saved places: address-first, interactive radius preview, precision fallback. */
+.place-search-line {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  max-width: 650px;
+}
+.place-search-line input {
+  flex: 1;
+  min-width: 0;
+}
+.place-search-line button {
+  margin: 0;
+  white-space: nowrap;
+}
+#place-preview {
+  width: 100%;
+  max-width: 650px;
+  height: 300px;
+  border-radius: 12px;
+  background: var(--panel-sunken);
+  margin: 14px 0;
+}
+#place-radius-slider {
+  max-width: 650px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+#place-address-status {
+  font-size: 0.9rem;
+  color: var(--accent-text);
+  min-height: 1.25rem;
+}
+#saved-places form {
+  max-width: 100%;
+}
+@media (max-width: 600px) {
+  .place-search-line {
+    flex-wrap: wrap;
+  }
+  .place-search-line button {
+    width: 100%;
+  }
+  #place-preview {
+    height: 260px;
+  }
+}
+
+/* Explicit navigation handoff; no coordinate request until a user activates the link. */
+.directions-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 10px 14px;
+  background: var(--chip);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.875rem;
+  min-height: 40px;
+  white-space: normal;
+  text-align: center;
+}
+.directions-link:hover {
+  background: var(--chip-hover);
+  color: var(--white);
+}
+.directions-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.member .directions-link {
+  margin: 0;
+}
+.map-location-row > p {
+  flex: 1;
+  min-width: 180px;
+}
+.leaflet-popup-content .directions-link {
+  margin-top: 8px;
+  color: var(--white);
+}
+
+/* Stable member cards; update small subregions rather than recreating buttons/avatar. */
+.member-card {
+  grid-template-columns: 56px minmax(210px, 1fr) minmax(0, auto);
+  column-gap: 14px;
+  row-gap: 12px;
+}
+.member-card > .member-primary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.member-card > .member-destructive-actions {
+  grid-column: 2/-1;
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--chip-hover);
+}
+.member-phone-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.member-phone {
+  max-width: none;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.member-phone-name {
+  font-size: 0.75rem;
+  color: var(--text-label);
+}
+.member-permission-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.member-permission-badge {
+  font-size: 0.7rem;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--chip);
+  color: var(--text-subdued);
+  white-space: nowrap;
+  cursor: help;
+  border: 1px solid var(--line-strong);
+}
+.member-permission-badge[data-state='allowed'] {
+  border-color: var(--ok-line);
+  color: var(--accent-text);
+  background: var(--ok-background);
+}
+.member-permission-badge[data-state='denied'] {
+  border-color: var(--danger-line);
+  color: var(--danger-text);
+  background: var(--danger-background);
+}
+.member-permission-badge[data-state='recent'] {
+  border-color: var(--warn-line);
+  color: var(--warn-text);
+}
+.member-phone .find-phone-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.member-phone .find-phone-actions button {
+  margin: 0;
+}
+.member-phone .phone-action-feedback {
+  font-size: 0.75rem;
+  color: var(--text-label);
+}
+.member-phone .phone-action-feedback:empty {
+  display: none;
+}
+.member-phone .find-phone-help {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .member-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 2;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
+  .member-card > .member-destructive-actions {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 600px) {
+  .member-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 1/-1;
+  }
+  .member-phone {
+    width: 100%;
+  }
+  .member-card > .member-destructive-actions {
+    justify-content: flex-end;
+  }
+  .member-permission-badges {
+    margin-right: auto;
+  }
+}
+
+/* Per-phone permission badges beside member info, actions at top right. */
+.member-card {
+  grid-template-columns: 56px minmax(190px, 250px) 48px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: start;
+}
+.member-card > .member-info {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+.member-card > .member-status-indicators {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-top: 38px;
+}
+.member-card > .member-primary-actions {
+  grid-column: 4;
+  grid-row: 1;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.member-card > .member-destructive-actions {
+  grid-column: 2/-1;
+  grid-row: 2;
+  padding-top: 12px;
+  justify-content: flex-end;
+}
+.member-status-indicators .member-permission-badges {
+  flex-direction: column;
+  gap: 6px;
+}
+.member-status-indicators .member-permission-badge {
+  width: 44px;
+  min-height: 34px;
+  padding: 6px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.member-permission-badge[data-state='observed'] {
+  color: var(--info-text);
+  border-color: var(--info-line);
+  background: var(--info-background);
+}
+.member-status-indicators:empty {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .member-card {
+    grid-template-columns: 56px minmax(0, 1fr) 48px;
+  }
+  .member-card > .member-info {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .member-card > .member-status-indicators {
+    grid-column: 3;
+    grid-row: 1;
+    padding-top: 35px;
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 2/-1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+  .member-card > .member-destructive-actions {
+    grid-column: 2/-1;
+    grid-row: 3;
+  }
+}
+@media (max-width: 600px) {
+  .member-card {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    column-gap: 10px;
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+  .member-card > .member-destructive-actions {
+    grid-column: 1/-1;
+    grid-row: 3;
+  }
+}
+
+/* Short Find My Phone results live below the action row, above destructive controls. */
+.member-card > .member-find-notice {
+  grid-column: 2/-1;
+  grid-row: 2;
+  font-size: 0.82rem;
+  color: var(--text-label);
+}
+.member-card > .member-find-notice:empty {
+  display: none;
+}
+.member-card > .member-destructive-actions {
+  grid-row: 3;
+}
+.member-find-notice .phone-action-feedback {
+  padding: 4px 0;
+  display: block;
+}
+.member-find-notice .phone-action-feedback:empty {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .member-card > .member-find-notice {
+    grid-column: 2/-1;
+    grid-row: 3;
+  }
+  .member-card > .member-destructive-actions {
+    grid-row: 4;
+  }
+}
+@media (max-width: 600px) {
+  .member-card > .member-find-notice {
+    grid-column: 1/-1;
+  }
+}
+
+/* Keep daily actions at a consistent lower edge and separate rows from invitations. */
+#invite {
+  margin-bottom: 30px;
+}
+#members {
+  margin-top: 28px;
+}
+.member-card > .member-primary-actions {
+  align-self: end;
+  padding-bottom: 6px;
+}
+.member-card > .member-destructive-actions {
+  margin-top: 12px;
+}
+.member-destructive-actions > .secondary {
+  margin-right: 0;
+}
+/* Consolidate household actions into one responsive row. Confirmation remains mandatory. */
+/* Member cards: keep identity and status next to each other; keep everyday
+   actions separate from destructive administrator-only controls. */
+.member-card {
+  grid-template-columns: 56px minmax(190px, 270px) 48px minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 14px;
+  align-items: start;
+}
+.member-card > .member-info {
+  grid-column: 2;
+  grid-row: 1;
+}
+.member-card > .member-info h3 {
+  overflow-wrap: anywhere;
+  margin: 0 0 6px;
+}
+.member-card > .member-info strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.member-card > .member-info .member-location {
+  margin: 8px 0 4px;
+  line-height: 1.45;
+}
+.member-card > .member-status-indicators {
+  grid-column: 3;
+  grid-row: 1;
+  align-items: center;
+  padding-top: 34px;
+}
+.member-card > .member-primary-actions {
+  grid-column: 4;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+  max-width: 100%;
+  min-width: 0;
+}
+.member-card > .member-primary-actions button,
+.member-card > .member-primary-actions .member-directions {
+  margin: 0;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.member-card > .member-primary-actions .member-phone-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.member-card > .member-primary-actions .member-phone {
+  gap: 12px;
+}
+.member-card .find-phone-actions {
+  gap: 12px;
+}
+.member-card > .member-find-notice {
+  grid-column: 4;
+  grid-row: 2;
+  margin: 0;
+}
+.member-card > .member-destructive-actions {
+  grid-column: 1/-1;
+  grid-row: 3;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--chip-hover);
+}
+.member-card > .member-destructive-actions:empty {
+  display: none;
+}
+.member-card > .member-destructive-actions button {
+  margin: 0;
+}
+@media (max-width: 1050px) {
+  .member-card {
+    grid-template-columns: 56px minmax(0, 1fr) 48px;
+  }
+  .member-card > .member-info {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .member-card > .member-status-indicators {
+    grid-column: 3;
+    grid-row: 1;
+    padding-top: 32px;
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 2/-1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+  .member-card > .member-find-notice {
+    grid-column: 2/-1;
+    grid-row: 3;
+  }
+  .member-card > .member-destructive-actions {
+    grid-column: 1/-1;
+    grid-row: 4;
+  }
+}
+@media (max-width: 600px) {
+  .member-card {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+  .member-card > .member-primary-actions {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+  .member-card > .member-find-notice {
+    grid-column: 1/-1;
+    grid-row: 3;
+  }
+  .member-card > .member-destructive-actions {
+    grid-column: 1/-1;
+    grid-row: 4;
+  }
+  .member-card > .member-primary-actions button {
+    padding: 10px 12px;
+  }
+  .member-card > .member-primary-actions .member-phone-controls {
+    width: 100%;
+  }
+  .member-card > .member-primary-actions .member-phone {
+    width: 100%;
+  }
+}
+
+/* Compact map member details; preserve native Escape and outside-click support. */
+.member-map-popup {
+  min-width: 190px;
+  max-width: 290px;
+  max-height: 260px;
+  overflow: auto;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.member-map-popup p {
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+}
+.member-map-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.member-map-popup-close {
+  padding: 3px 9px;
+  margin: 0 !important;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+.member-map-popup button:not(.member-map-popup-close) {
+  margin: 8px 8px 0 0;
+}
+
+/* October 20 server cleanup: Places are independent of member administration. */
+#saved-places[hidden],
+[data-client-pane][hidden] {
+  display: none !important;
+}
+.place-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 14px;
+  margin: 18px 0 24px;
+}
+.place-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--chip-hover);
+  border-radius: 16px;
+  background: var(--panel-raised);
+  min-width: 0;
+}
+.place-card-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.place-card-summary strong {
+  font-size: 1.08rem;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.place-card-summary span {
+  font-size: 0.88rem;
+  color: var(--text-subdued);
+}
+.place-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+}
+.place-card-actions button {
+  margin: 0;
+}
+#saved-places #place-form {
+  border-top: 1px solid var(--chip-hover);
+  padding-top: 20px;
+  scroll-margin-top: 20px;
+}
+.member-card > .member-status-indicators {
+  padding-top: 2px;
+}
+.member-card > .member-destructive-actions {
+  justify-content: flex-end;
+  gap: 12px;
+}
+.member-card > .member-destructive-actions .secondary {
+  margin-left: 0;
+  margin-right: 0;
+}
+.member-card > .member-push-feedback {
+  grid-column: 2/-1;
+  grid-row: 4;
+  font-size: 0.8rem;
+  color: var(--text-label);
+  text-align: right;
+}
+.member-card > .member-push-feedback:empty {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .member-card > .member-push-feedback {
+    grid-column: 1/-1;
+    grid-row: 5;
+  }
+}
+@media (max-width: 600px) {
+  .place-cards {
+    grid-template-columns: 1fr;
+  }
+  .member-card > .member-push-feedback {
+    text-align: left;
+  }
+}
+
+/* October 24: household card approval mockup. Daily controls stay in the
+   first row; irreversible phone revocation sits left of account actions. */
+.member-card > .member-primary-actions {
+  align-self: center;
+  padding-bottom: 0;
+}
+.member-card > .member-destructive-actions {
+  justify-content: space-between;
+  gap: 12px;
+}
+.member-card > .member-destructive-actions .member-phone-revokes,
+.member-card > .member-destructive-actions .member-account-revokes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+.member-card > .member-destructive-actions .member-phone-revokes {
+  margin-right: auto;
+}
+.member-card > .member-destructive-actions .member-account-revokes {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.member-card .member-phone-revoke {
+  margin: 0;
+}
+.member-card > .member-primary-actions > .secondary {
+  margin: 0;
+}
+.member-card > .member-primary-actions .member-phone {
+  min-width: 0;
+}
+
+/* Saved Places: existing read-only thumbnail tiles, an overview map, and
+   only then the form with its own editable boundary map. */
+#saved-places .place-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0 36px;
+}
+#saved-places .place-card {
+  width: 100%;
+  gap: 12px;
+  padding: 12px;
+  background: var(--panel-raised);
+}
+#saved-places .place-card-summary {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: row;
+  gap: 26px;
+}
+#saved-places .place-card-photo {
+  position: relative;
+  flex: 0 0 180px;
+  width: 180px;
+  height: 98px;
+  max-width: 45%;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--line);
+  pointer-events: none !important;
+  user-select: none;
+}
+#saved-places .place-card-photo * {
+  pointer-events: none !important;
+}
+#saved-places .place-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 4px;
+}
+#saved-places .place-card-details strong {
+  color: var(--text);
+}
+#saved-places .place-card-details span {
+  color: var(--text-subdued);
+  font-size: 0.85rem;
+}
+#saved-places .place-card-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#saved-places .place-card-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#saved-places #places-status {
+  margin: 14px 0 32px;
+}
+#saved-places #places-status:empty {
+  display: none;
+}
+#saved-places #place-list {
+  margin-bottom: 32px;
+}
+#saved-places #place-editor-heading {
+  margin: 30px 0 8px;
+}
+#saved-places #place-form {
+  margin-top: 12px;
+  max-width: none;
+}
+#saved-places #place-form input:not([type='range']) {
+  max-width: 650px;
+}
+#saved-places #place-form #cancel-place-edit {
+  margin-left: 10px;
+}
+@media (max-width: 680px) {
+  .member-card > .member-destructive-actions .member-account-revokes {
+    margin-left: 0;
+  }
+  #saved-places .place-card-summary {
+    gap: 12px;
+  }
+  #saved-places .place-card-photo {
+    flex-basis: 120px;
+    width: 120px;
+    height: 88px;
+  }
+  #saved-places #place-form #cancel-place-edit {
+    margin-left: 0;
+  }
+}
+
+/* Place the irreversible actions above the closing divider, not below it. */
+.member-card > .member-destructive-actions {
+  border-top: 0;
+  padding-top: 0;
+  border-bottom: 1px solid var(--chip-hover);
+  padding-bottom: 14px;
+  margin-top: 0;
+}
+
+/* Route thumbnails contain an inert SVG path, never a map tile or pan handler. */
+.timeline-card .trip-route-thumbnail {
+  height: 150px;
+  max-height: 150px;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  background: var(--panel-sunken);
+}
+.timeline-card .trip-route-thumbnail svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#trip-more-status {
+  font-size: 0.84rem;
+  color: var(--text-subdued);
+  text-align: center;
+  margin: 16px 0;
+}
+
+/* Life360-style shared-address avatars: overlap slightly but remain individually
+   clickable. Only portrait pixels move; recorded GPS coordinates do not. */
+#household-map .map-person {
+  position: relative;
+  transform: translate(var(--fan-x, 0px), var(--fan-y, 0px));
+  cursor: pointer;
+  outline-offset: 3px;
+}
+/* Transparent 96px marker wrappers must not cover neighboring portraits. */
+#household-map .person-marker {
+  pointer-events: none !important;
+}
+#household-map .map-person {
+  pointer-events: auto;
+  width: 96px;
+  margin-inline: auto;
+}
+#household-map .map-person.map-person-grouped {
+  width: 48px;
+}
+#household-map .map-person.map-person-grouped .map-person-label {
+  display: none;
+}
+#household-map .person-marker:has(.map-person:hover),
+#household-map .person-marker:has(.map-person.is-open),
+#household-map .person-marker:has(.map-person:focus) {
+  z-index: 100000 !important;
+}
+#household-map .map-person:focus-visible {
+  outline: 2px solid var(--accent);
+  border-radius: 10px;
+}
+#household-map .map-person > .member-map-popup {
+  position: absolute;
+  display: none;
+  bottom: calc(100% + 11px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100002;
+  width: max-content;
+  min-width: 180px;
+  max-width: min(270px, 80vw);
+  padding: 10px 13px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: 0 7px 22px var(--shadow);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: normal;
+}
+#household-map .map-person:hover > .member-map-popup,
+#household-map .map-person:focus > .member-map-popup,
+#household-map .map-person.is-open > .member-map-popup {
+  display: block;
+}
+#household-map .member-map-popup strong {
+  font-size: 13px;
+  color: var(--text);
+}
+#household-map .member-map-popup p {
+  margin: 4px 0 0;
+  color: var(--text-label);
+  overflow-wrap: anywhere;
+}
+#household-map .member-map-popup p:last-child {
+  margin-bottom: 0;
+}
+/* Household member cards match Saved Place cards: enclosed, rounded, same background and spacing. */
+#members {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#members > .member-card {
+  border: 1px solid var(--chip-hover);
+  border-radius: 16px;
+  background: var(--panel-raised);
+  padding: 14px 16px;
+}
+#members > .member-card > .member-destructive-actions {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.timeline-card .trip-route-thumbnail {
+  position: relative;
+}
+.timeline-card .trip-route-thumbnail svg {
+  position: relative;
+  z-index: 1;
+}
+.timeline-card .trip-route-thumbnail > span {
+  position: relative;
+  z-index: 1;
+  color: var(--text-subdued);
+}
+.trip-tiles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  filter: brightness(0.72) saturate(0.85);
+}
+img.trip-tiles {
+  object-fit: cover;
+}
+.timeline-card .trip-route-thumbnail > .trip-tiles-attribution {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  z-index: 2;
+  font-size: 10px;
+  color: var(--text);
+  background: var(--overlay);
+  padding: 1px 5px;
+  border-radius: 6px;
+}
+.trip-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.9rem;
+}
+.trip-preview-toggle input {
+  width: auto;
+  margin: 0;
+}
+.mail-help {
+  margin: 4px 0 14px;
+  color: var(--text-label);
+  font-size: 14px;
+}
+.mail-help ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.mail-help li {
+  margin: 4px 0;
+}
+.mail-help a {
+  color: var(--accent-text);
+}
+.mail-help .warn {
+  padding: 10px 12px;
+  border: 1px solid var(--warn-line);
+  border-radius: 10px;
+}
+#mail-advanced,
+#alexa-own {
+  margin: 6px 0 14px;
+}
+#mail-advanced summary,
+#alexa-own summary {
+  cursor: pointer;
+  color: var(--text-subdued);
+  margin-bottom: 8px;
+}
+.relay-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.relay-list li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.relay-list span {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.relay-list small {
+  color: var(--text-subdued);
+  overflow-wrap: anywhere;
+}
+
+/* Admin settings: each section opens from its heading. */
+.settings-section {
+  padding: 0;
+}
+.settings-section > summary {
+  display: flex;
+  align-items: center;
+  padding: 22px 28px;
+}
+.settings-section > summary h2 {
+  display: inline;
+  margin: 0;
+}
+.settings-section-body {
+  padding: 0 28px 28px;
+}
+
+/* Admin settings: two columns that each grow on their own. */
+#admin-settings-grid {
+  align-items: start;
+}
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.settings-column > .card {
+  margin: 0;
+}
+
+/* A member's email and phone, one per line under their name. */
+.member-contact {
+  display: block;
+  color: var(--text-subdued);
+}

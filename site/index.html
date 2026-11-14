@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}} — family location on a server you own</title>
+    <meta
+      name="description"
+      content="{{name}} shows your family on a map, keeps a history of trips and alerts you at the places that matter. It runs on your own server, and every location is encrypted on the phone before it leaves."
+    />
+    <meta property="og:title" content="{{name}}" />
+    <meta
+      property="og:description"
+      content="Family location sharing on a server you own. Nobody outside your household sees where you are."
+    />
+    <meta property="og:image" content="https://{{domain}}/media/map.png" />
+    <meta property="og:url" content="https://{{domain}}/" />
+    <meta name="theme-color" content="#0b1019" />
+    <link rel="icon" href="icon-64.png" />
+    <link rel="apple-touch-icon" href="icon-256.png" />
+    <link rel="stylesheet" href="demo/leaflet.css" />
+    <link rel="stylesheet" href="demo/app.css" />
+    <link rel="stylesheet" href="demo/demo.css" />
+  </head>
+  <body>
+    <main id="app">
+      <p>Loading {{name}}…</p>
+      <noscript
+        >This page shows {{name}} with a made-up family and needs JavaScript. See the
+        <a href="setup.html">install guide</a> or <a href="{{github}}">GitHub</a>.</noscript
+      >
+    </main>
+    <div id="demo-toast" role="status" hidden></div>
+    <script src="demo/leaflet.js"></script>
+    <script src="demo/data.js"></script>
+    <script src="demo/demo.js"></script>
+  </body>
+</html>

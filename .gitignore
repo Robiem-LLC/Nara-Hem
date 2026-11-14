@@ -1,0 +1,54 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.p8
+*.mobileprovision
+# Firebase client config: CI writes it from the NARAHEM_GOOGLE_SERVICES_JSON secret
+apps/android/app/google-services.json
+
+# Native/local build output
+.DS_Store
+DerivedData/
+build/
+.build/
+xcuserdata/
+deploy/exports/
+*.xcuserstate
+.gradle/
+.kotlin/
+local.properties
+.idea/
+
+# Future server/web dependencies
+# A folder or a link to one.
+node_modules
+dist/
+.venv
+__pycache__/
+*.pyc
+.pytest_cache/
+# Test coverage output
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+
+# Runtime/private state
+data/
+# Kotlin package, not runtime data.
+!apps/android/app/src/*/kotlin/com/robiem/narahem/data/
+backups/
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Push relay defaults are injected only by official image builds
+apps/webapp/backend/narahem/relay-defaults.json
+
+# Generated browser app (npm run build in apps/webapp/frontend; built in Docker and CI)
+apps/webapp/backend/static/

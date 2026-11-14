@@ -1,0 +1,39 @@
+name: Format
+
+# Checks declaration layout, and formatting and lint for Python, JavaScript/CSS/HTML/YAML/
+# Markdown and shell scripts.
+# Kotlin is checked by "Android tests" (it needs the Android SDK image); Swift is checked on the
+# Mac by "iOS Mac mini" validation runs.
+# Runs on the self-hosted Linux runner for main, dev, manual runs and pull requests from branches
+# of this repository (never forks).
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install pinned tools
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r tools/format/requirements.txt
+          npm ci --ignore-scripts
+      - name: Check formatting and lint
+        run: bash tools/format/run.sh check layout python web shell

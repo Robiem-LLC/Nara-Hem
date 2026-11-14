@@ -1,0 +1,73 @@
+name: narahem
+
+services:
+  narahem:
+    image: ${NARAHEM_IMAGE:?Set NARAHEM_IMAGE to the published server image, e.g. ghcr.io/OWNER/nara-hem}:${NARAHEM_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: postgresql+psycopg://narahem:${NARAHEM_DB_PASSWORD:?Run prepare.py first}@database:5432/narahem
+      NARAHEM_PUBLIC_URL: ${NARAHEM_PUBLIC_URL:?Run prepare.py first}
+      NARAHEM_ALLOW_HTTP: ${NARAHEM_ALLOW_HTTP:-0}
+      NARAHEM_DATA_DIR: /data
+      NARAHEM_GOOGLE_MAPS_API_KEY: ${NARAHEM_GOOGLE_MAPS_API_KEY:-}
+      NARAHEM_TEXTBELT_KEY: ${NARAHEM_TEXTBELT_KEY:-}
+      NARAHEM_ALLOW_ALEXA: ${NARAHEM_ALLOW_ALEXA:-false}
+      NARAHEM_STRICT_EVENT_AUDIENCE: ${NARAHEM_STRICT_EVENT_AUDIENCE:-0}
+      NARAHEM_ROAD_MATCHING: ${NARAHEM_ROAD_MATCHING:-1}
+      NARAHEM_ROAD_PIN_RADIUS_MILES: ${NARAHEM_ROAD_PIN_RADIUS_MILES:-25}
+      NARAHEM_ROAD_CACHE_TTL_DAYS: ${NARAHEM_ROAD_CACHE_TTL_DAYS:-21}
+      NARAHEM_ROAD_CACHE_MAX_GB: ${NARAHEM_ROAD_CACHE_MAX_GB:-8}
+      NARAHEM_ROAD_DOWNLOAD_MAX_MB: ${NARAHEM_ROAD_DOWNLOAD_MAX_MB:-512}
+      NARAHEM_ROAD_PREP_MEMORY_MB: ${NARAHEM_ROAD_PREP_MEMORY_MB:-2048}
+      NARAHEM_ROAD_THREADS: ${NARAHEM_ROAD_THREADS:-1}
+      NARAHEM_SETUP_TOKEN: ${NARAHEM_SETUP_TOKEN:-}
+      NARAHEM_PUSH_RELAY_URL: ${NARAHEM_PUSH_RELAY_URL:-}
+      NARAHEM_PUSH_RELAY_TOKEN: ${NARAHEM_PUSH_RELAY_TOKEN:-}
+      NARAHEM_FCM_RELAY_URL: ${NARAHEM_FCM_RELAY_URL:-}
+      NARAHEM_FCM_RELAY_TOKEN: ${NARAHEM_FCM_RELAY_TOKEN:-}
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - server-data:/data
+      # Readable redacted diagnostic reports, e.g. for a Windows file share.
+      - ${NARAHEM_EXPORTS_PATH:-./exports}:/exports
+    ports:
+      - '${NARAHEM_BIND_ADDRESS:-127.0.0.1}:${NARAHEM_PORT:-8186}:8080'
+    read_only: true
+    cap_drop:
+      - ALL
+    # Only the short-lived entrypoint uses these to fix fresh bind mounts;
+    # the actual Nära Hem process is then dropped to unprivileged UID 10001.
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: ${NARAHEM_CONTAINER_MEMORY_MB:-3072}m
+
+  database:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: narahem
+      POSTGRES_DB: narahem
+      POSTGRES_PASSWORD: ${NARAHEM_DB_PASSWORD:?Run prepare.py first}
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U narahem -d narahem']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+
+volumes:
+  server-data:
+  database-data:

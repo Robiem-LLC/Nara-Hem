@@ -1,0 +1,19 @@
+{
+  "name": "narahem-repo-tools",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Formatting and lint tools for the whole repository. App dependencies live in each app.",
+  "type": "module",
+  "scripts": {
+    "format": "bash tools/format/run.sh fix",
+    "lint": "bash tools/format/run.sh check"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "globals": "17.14.0",
+    "jsdoc": "4.0.4",
+    "prettier": "3.9.10"
+  }
+}

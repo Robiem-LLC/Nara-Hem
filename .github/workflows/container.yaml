@@ -1,0 +1,278 @@
+name: Container
+
+# Container CI is intentionally independent of native iOS/Android changes.
+# Avoid burning private-repository Actions minutes on unrelated native-only PRs.
+on:
+  pull_request:
+    paths:
+      - 'apps/webapp/**'
+      - 'deploy/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/container.yaml'
+  push:
+    branches: [main, dev, apple]
+    paths:
+      - 'apps/webapp/**'
+      - 'deploy/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/container.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-${{ github.ref }}
+  # Cancel obsolete PR runs so the newest code is validated first; never cancel main publishing.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # PR and dev-branch code run only on disposable GitHub-hosted runners.
+  # Validate dev after merging before publishing it; keep unreviewed code
+  # away from the production self-hosted builder.
+  # All validation runs on the dedicated self-hosted Linux runner and its isolated DinD daemon:
+  # main, dev, manual runs, and pull requests from branches of this repository (never forks).
+  validate:
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: narahem_test
+          POSTGRES_PASSWORD: synthetic-ci-password
+          POSTGRES_DB: narahem_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U narahem_test -d narahem_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install test dependencies
+        run: |
+          python3 -m pip install -r apps/webapp/backend/requirements-dev.txt
+      - name: Build and verify browser crypto
+        # The backend serves the built page (backend/static), so build before the backend tests.
+        run: |
+          npm --prefix apps/webapp/frontend ci --ignore-scripts
+          npm --prefix apps/webapp/frontend test
+          npm --prefix apps/webapp/frontend run build
+      - name: Backend tests (SQLite)
+        run: python3 -m unittest discover -s apps/webapp/backend/tests -t apps/webapp/backend -v
+      - name: Backend tests (PostgreSQL)
+        env:
+          NARAHEM_TEST_DATABASE_URL: postgresql+psycopg://narahem_test:synthetic-ci-password@docker:5432/narahem_test
+        run: python3 -m unittest discover -s apps/webapp/backend/tests -t apps/webapp/backend -v
+      - name: CI helpers (relay defaults, GitHub release)
+        run: python3 -m unittest discover -s ci/tests -t ci -p 'test_*.py'
+      - name: Validate Cloudflare APNs and FCM Workers
+        run: node --test 'deploy/cloudflare/tests/*.test.mjs'
+      - name: Cloudflare APNs and FCM relay regression tests
+        run: node --test 'deploy/cloudflare/tests/*.test.mjs'
+      - name: Alexa forwarder (Amazon-hosted skill code)
+        run: node --test deploy/alexa/forwarder/forwarder.test.cjs
+      - name: Browser setup and encrypted sharing checks
+        run: |
+          node apps/webapp/frontend/node_modules/playwright/cli.js install --with-deps chromium
+          for provider in openstreetmap google; do
+            log="$RUNNER_TEMP/browser-$provider.log"
+            if NARAHEM_TEST_MAP_PROVIDER=$provider node apps/webapp/frontend/tests/browser/end-to-end.cjs >"$log" 2>&1; then
+              cat "$log"
+            else
+              cat "$log"
+              # An annotation stays readable through the API when raw logs are not. Synthetic data only.
+              summary=$(grep -v 'SETUP TOKEN' "$log" | tail -n 40 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+              echo "::error title=Browser test failed ($provider)::$summary"
+              exit 1
+            fi
+          done
+      - name: Validate Compose
+        env:
+          NARAHEM_PUBLIC_URL: https://narahem.example.invalid
+          NARAHEM_DB_PASSWORD: synthetic-ci-password
+          NARAHEM_IMAGE: ghcr.io/example/narahem
+        run: |
+          docker compose -f deploy/compose.yaml config --quiet
+          NARAHEM_CLOUDFLARE_TUNNEL_TOKEN=synthetic-ci-only-token docker compose -f deploy/compose.yaml -f deploy/compose.tunnel.yaml config --quiet
+          docker compose -f deploy/portainer-stack.yaml config --quiet
+      - name: Build image
+        run: docker build --pull -t narahem:test .
+      - name: Smoke test hardened container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name narahem-smoke --read-only --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+            --security-opt no-new-privileges:true --pids-limit 64 --memory 512m \
+            --tmpfs /data:rw,uid=0,gid=0,mode=0755 --tmpfs /exports:rw,uid=0,gid=0,mode=0700 \
+            -e DATABASE_URL=sqlite:////data/smoke.db \
+            -e NARAHEM_PUBLIC_URL=http://localhost:8080 -e NARAHEM_ALLOW_HTTP=1 \
+            narahem:test
+          trap 'docker rm -f narahem-smoke >/dev/null' EXIT
+          ready=false
+          for attempt in {1..30}; do
+            if docker exec narahem-smoke python -c "import json,urllib.request; r=json.load(urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)); assert r == {'status':'ok','stage':'setup','configured':False}"; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          # A root-owned /exports mount becomes a readable folder the service can write.
+          test "$(docker exec narahem-smoke stat -c '%u %a' /exports)" = "10001 755"
+          # Container bootstrap is briefly root, but the actual API must be
+          # UID 10001 with ZERO effective Linux capabilities.
+          docker exec -i narahem-smoke python - <<'PYUID'
+          from pathlib import Path
+          found = False
+          for proc in Path('/proc').iterdir():
+              if not proc.name.isdigit():
+                  continue
+              try:
+                  cmd = (proc/'cmdline').read_bytes().replace(b'\0', b' ')
+                  if b'uvicorn' not in cmd or b'narahem.app:create_app' not in cmd:
+                      continue
+                  attrs = dict(line.split(':', 1) for line in (proc/'status').read_text().splitlines() if ':' in line)
+                  assert attrs['Uid'].split()[0] == '10001', attrs['Uid']
+                  assert int(attrs['CapEff'].strip(), 16) == 0, attrs['CapEff']
+                  found = True
+              except (OSError, ProcessLookupError):
+                  continue
+          assert found, 'Server did not drop privileges to UID 10001'
+          PYUID
+          docker exec narahem-smoke sh -c 'command -v osrm-extract && command -v osrm-partition && command -v osrm-customize && command -v osrm-routed'
+          # Portainer starts root consoles; maintenance CLI drops to UID 10001.
+          docker exec narahem-smoke python manage.py diagnostics --category gps --hours 1 --yes --output smoke-root-cli.txt
+          # With /exports mounted the console report lands there, readable by a file share.
+          docker exec --user 10001:10001 narahem-smoke sh -c 'test "$(stat -c %u /exports/narahem-smoke-root-cli.txt)" = 10001; test "$(stat -c %a /exports/narahem-smoke-root-cli.txt)" = 644'
+
+      - name: Compose setup and persistence
+        shell: bash
+        env:
+          NARAHEM_PUBLIC_URL: http://127.0.0.1:18186
+          NARAHEM_ALLOW_HTTP: '1'
+          NARAHEM_PORT: '18186'
+          NARAHEM_DB_PASSWORD: synthetic-compose-only-password
+          NARAHEM_TAG: ci-test
+          NARAHEM_IMAGE: local/narahem
+        run: |
+          set -euo pipefail
+          docker tag narahem:test "$NARAHEM_IMAGE:ci-test"
+          # Reproduce a freshly created bind mount: /data starts root-owned
+          # and unwritable by Nära Hem's UID 10001.
+          docker volume create narahem-ci_server-data >/dev/null
+          docker run --rm -v narahem-ci_server-data:/data busybox:1.37.0 sh -ec 'chown 0:0 /data; chmod 0755 /data'
+          compose=(docker compose -p narahem-ci -f deploy/compose.yaml)
+          trap '"${compose[@]}" down -v >/dev/null' EXIT
+          "${compose[@]}" up -d --wait --wait-timeout 120
+          "${compose[@]}" exec -T narahem sh -ec 'test "$(stat -c %u /data)" = 10001; test "$(stat -c %a /data)" = 700'
+          "${compose[@]}" exec -T -u 10001:10001 narahem python -c "from pathlib import Path; assert any(b'uvicorn' in (p/'cmdline').read_bytes() and (p/'status').read_text().split('Uid:')[1].split()[0]=='10001' for p in Path('/proc').iterdir() if p.name.isdigit())"
+          "${compose[@]}" exec -T -u 10001:10001 narahem python - <<'PYTEST'
+          import json, os, pathlib, urllib.request
+          origin = os.environ["NARAHEM_PUBLIC_URL"]
+          token = pathlib.Path("/data/bootstrap-token").read_text()
+          data = json.dumps(dict(token=token, household="CI Household", email="owner@example.invalid", username="owner", password="synthetic long CI password")).encode()
+          request = urllib.request.Request("http://127.0.0.1:8080/api/setup", data=data, headers={"Host":"127.0.0.1:18186", "Origin":origin, "Content-Type":"application/json"})
+          assert urllib.request.urlopen(request).status == 201
+          assert not pathlib.Path("/data/bootstrap-token").exists()
+          PYTEST
+          "${compose[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 120 narahem
+          "${compose[@]}" exec -T -u 10001:10001 narahem python -c "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8080/healthz'))['configured'] is True"
+
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build and publish
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NARAHEM_PUSH_RELAY_URL: ${{ secrets.NARAHEM_PUSH_RELAY_URL }}
+          NARAHEM_FCM_RELAY_URL: ${{ secrets.NARAHEM_FCM_RELAY_URL }}
+          NARAHEM_ALEXA_RELAY_URL: ${{ secrets.NARAHEM_ALEXA_RELAY_URL || vars.NARAHEM_ALEXA_RELAY_URL }}
+          NARAHEM_ALEXA_STORE_SKILL_ID: ${{ secrets.NARAHEM_ALEXA_STORE_SKILL_ID || vars.NARAHEM_ALEXA_STORE_SKILL_ID }}
+          NARAHEM_IOS_APP_URL: ${{ secrets.NARAHEM_IOS_APP_URL || vars.NARAHEM_IOS_APP_URL }}
+          NARAHEM_ANDROID_APP_URL: ${{ secrets.NARAHEM_ANDROID_APP_URL || vars.NARAHEM_ANDROID_APP_URL || format('{0}/{1}/releases/latest/download/NaraHem-Android.apk', github.server_url, github.repository) }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          relay_defaults="$RUNNER_TEMP/relay-defaults.json"
+          trap 'rm -f "$relay_defaults"; docker logout ghcr.io >/dev/null' EXIT
+          python3 "$GITHUB_WORKSPACE/ci/relay_defaults.py" "$relay_defaults" >> "$GITHUB_STEP_SUMMARY"
+          relay_sha="$(sha256sum "$relay_defaults" | cut -d' ' -f1)"
+          DOCKER_BUILDKIT=1 docker build --pull --secret "id=relay_defaults,src=$relay_defaults" \
+            --build-arg "NARAHEM_RELAY_DEFAULTS_SHA=$relay_sha" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --build-arg NARAHEM_BUILD_CHANNEL=main --build-arg "NARAHEM_BUILD_NUMBER=$GITHUB_RUN_NUMBER" \
+            --build-arg "NARAHEM_BUILD_COMMIT=$GITHUB_SHA" --build-arg "NARAHEM_BUILD_UTC=$(date -u '+%Y-%m-%dT%H:%MZ')" \
+            -t "$image:sha-$GITHUB_SHA" -t "$image:latest" .
+          bash "$GITHUB_WORKSPACE/ci/check-relay-defaults.sh" "$image:sha-$GITHUB_SHA" "$relay_defaults"
+          docker push "$image:sha-$GITHUB_SHA"
+          docker push "$image:latest"
+
+  # Channels kept separate from production: the dev branch publishes :dev, and the
+  # apple branch publishes :apple for the app store review demo server, each with
+  # an immutable :<channel>-sha-* tag. main remains the sole :latest publisher.
+  publish-channel:
+    needs: validate
+    if: >-
+      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY && github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/apple')
+    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build and publish channel image
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NARAHEM_PUSH_RELAY_URL: ${{ secrets.NARAHEM_PUSH_RELAY_URL }}
+          NARAHEM_FCM_RELAY_URL: ${{ secrets.NARAHEM_FCM_RELAY_URL }}
+          NARAHEM_ALEXA_RELAY_URL: ${{ secrets.NARAHEM_ALEXA_RELAY_URL || vars.NARAHEM_ALEXA_RELAY_URL }}
+          NARAHEM_ALEXA_STORE_SKILL_ID: ${{ secrets.NARAHEM_ALEXA_STORE_SKILL_ID || vars.NARAHEM_ALEXA_STORE_SKILL_ID }}
+          NARAHEM_IOS_APP_URL: ${{ secrets.NARAHEM_IOS_APP_URL || vars.NARAHEM_IOS_APP_URL }}
+          NARAHEM_ANDROID_APP_URL: ${{ secrets.NARAHEM_ANDROID_APP_URL || vars.NARAHEM_ANDROID_APP_URL || format('{0}/{1}/releases/latest/download/NaraHem-Android.apk', github.server_url, github.repository) }}
+        run: |
+          set -euo pipefail
+          channel="$GITHUB_REF_NAME"
+          [[ "$channel" == dev || "$channel" == apple ]] || { echo "Unexpected channel $channel" >&2; exit 1; }
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          relay_defaults="$RUNNER_TEMP/relay-defaults.json"
+          trap 'rm -f "$relay_defaults"; docker logout ghcr.io >/dev/null' EXIT
+          python3 "$GITHUB_WORKSPACE/ci/relay_defaults.py" "$relay_defaults" >> "$GITHUB_STEP_SUMMARY"
+          relay_sha="$(sha256sum "$relay_defaults" | cut -d' ' -f1)"
+          DOCKER_BUILDKIT=1 docker build --pull --secret "id=relay_defaults,src=$relay_defaults" \
+            --build-arg "NARAHEM_RELAY_DEFAULTS_SHA=$relay_sha" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.ref.name=$channel" \
+            --build-arg "NARAHEM_BUILD_CHANNEL=$channel" --build-arg "NARAHEM_BUILD_NUMBER=$GITHUB_RUN_NUMBER" \
+            --build-arg "NARAHEM_BUILD_COMMIT=$GITHUB_SHA" --build-arg "NARAHEM_BUILD_UTC=$(date -u '+%Y-%m-%dT%H:%MZ')" \
+            -t "$image:$channel-sha-$GITHUB_SHA" -t "$image:$channel" .
+          bash "$GITHUB_WORKSPACE/ci/check-relay-defaults.sh" "$image:$channel-sha-$GITHUB_SHA" "$relay_defaults"
+          docker push "$image:$channel-sha-$GITHUB_SHA"
+          docker push "$image:$channel"
+          echo "Published $channel container: $image:$channel" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable $channel build: $image:$channel-sha-$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 840">
+  <defs>
+    <linearGradient id="amber" gradientUnits="userSpaceOnUse" x1="200" y1="180" x2="560" y2="720">
+      <stop offset="0" stop-color="#FFE47E"/>
+      <stop offset="0.5" stop-color="#FFC43C"/>
+      <stop offset="1" stop-color="#FF8C1E"/>
+    </linearGradient>
+    <linearGradient id="road" gradientUnits="userSpaceOnUse" x1="0" y1="590" x2="0" y2="806">
+      <stop offset="0" stop-color="#FFE68C"/>
+      <stop offset="1" stop-color="#FFB12F"/>
+    </linearGradient>
+    <linearGradient id="dot" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE57F"/>
+      <stop offset="1" stop-color="#FFC63F"/>
+    </linearGradient>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="720" height="840">
+      <path fill="#fff" d="M40 706 V548 Q40 472 96 420 L276 252 Q345 184 414 252 L634 420 Q690 472 690 548 V706 Z"/>
+      <path fill="#000" d="M175 606 V492 Q175 456 202 432 L318 322 Q345 297 372 322 L498 432 Q525 456 525 492 V606 Z"/>
+      <path fill="#000" d="M-20 732 L40 708 C110 660 160 618 302 600 L525 600 L525 614 L700 708 L740 732 V860 H-20 Z"/>
+    </mask>
+  </defs>
+  <rect width="720" height="840" fill="url(#amber)" mask="url(#cut)"/>
+  <circle cx="252" cy="96" r="64" fill="url(#dot)"/>
+  <circle cx="440" cy="96" r="64" fill="url(#dot)"/>
+  <g fill="#FFDA6A">
+    <rect x="272" y="414" width="64" height="64" rx="9"/>
+    <rect x="360" y="414" width="64" height="64" rx="9"/>
+    <rect x="272" y="498" width="64" height="64" rx="9"/>
+    <rect x="360" y="498" width="64" height="64" rx="9"/>
+  </g>
+  <path fill="url(#road)" d="M66 806 C128 716 210 640 302 606 L550 590 C474 618 380 650 370 690 C362 734 520 778 656 806 Z"/>
+</svg>

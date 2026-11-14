@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One full 108dp layer: the artwork is shrunk inside the visible 72dp so circular
+     launcher masks keep every pin, with a softened copy of the background around it. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_layer" />
+    <foreground android:drawable="@android:color/transparent" />
+</adaptive-icon>

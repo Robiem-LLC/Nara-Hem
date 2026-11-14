@@ -1,0 +1,5 @@
+# Nära Hem's Android release key: the SHA-256 of its certificate. Release builds must be signed
+# with exactly this key; check an APK with:
+#   apksigner verify --print-certs NaraHem-Android-X.Y.Z.apk
+# The release workflow refuses to publish until the fingerprint is filled in below.
+SHA-256: 96:A8:9A:D3:5B:91:CF:23:84:C3:81:72:09:72:CB:13:39:B5:7A:FD:BC:00:B8:96:30:32:F9:90:10:DE:A3:38

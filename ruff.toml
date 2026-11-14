@@ -1,0 +1,26 @@
+# Python formatting and lint rules for the whole repository.
+# Run: ruff format && ruff check --fix
+line-length = 100
+# The Mac CI runs ci/ scripts with macOS's /usr/bin/python3 (3.9), so suggestions must not
+# require newer syntax there. The server image uses a newer Python.
+target-version = "py39"
+
+[format]
+quote-style = "double"
+
+[lint]
+select = [
+  "E",  # pycodestyle errors (includes one statement per line: E701, E702)
+  "W",  # pycodestyle warnings
+  "F",  # pyflakes: unused imports and variables, undefined names
+  "I",  # import sorting
+  "B",  # bugbear: likely bugs
+  "UP", # pyupgrade: modern syntax for the target version
+]
+
+[lint.flake8-bugbear]
+# FastAPI's dependency injection is declared as a default argument by design.
+extend-immutable-calls = ["fastapi.Depends"]
+
+[lint.isort]
+known-first-party = ["narahem"]

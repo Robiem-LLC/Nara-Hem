@@ -1,0 +1,13 @@
+# Keep the Docker build context to what the image needs.
+# Whole folders are re-included below; tests, local builds and caches are then excluded.
+**
+!apps/
+!apps/webapp/
+!apps/webapp/backend/
+!apps/webapp/frontend/
+apps/webapp/backend/tests/
+apps/webapp/backend/static/
+apps/webapp/frontend/tests/
+apps/webapp/frontend/node_modules/
+**/__pycache__/
+**/.venv/

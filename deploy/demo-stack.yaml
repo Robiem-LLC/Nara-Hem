@@ -1,0 +1,72 @@
+# Nära Hem demo server for app store review: a separate stack, never your household's.
+# It runs a server in review mode plus a made-up family that keeps it busy. Give it its own
+# folder, port and HTTPS address. Set the variables in Portainer's "Environment variables", never
+# in this file. After first-run setup, the reviewer signs in with NARAHEM_DEMO_REVIEWER and
+# NARAHEM_DEMO_PASSWORD, and enters NARAHEM_REVIEW_CODE when asked for a code.
+
+services:
+  narahem:
+    image: ${NARAHEM_IMAGE:?Set NARAHEM_IMAGE to the published server image, e.g. ghcr.io/OWNER/nara-hem}:${NARAHEM_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    environment:
+      NARAHEM_PUBLIC_URL: ${NARAHEM_PUBLIC_URL:?the demo server's HTTPS address, e.g. https://demo.example.com}
+      DATABASE_URL: postgresql+psycopg://narahem:${NARAHEM_DB_PASSWORD:?long random password}@database:5432/narahem
+      NARAHEM_GOOGLE_MAPS_API_KEY: ${NARAHEM_GOOGLE_MAPS_API_KEY:-} #optional: blank = OpenStreetMap
+      # Review mode: the reviewer and the family get this phone code instead of an email.
+      NARAHEM_REVIEW_CODE: ${NARAHEM_REVIEW_CODE:?six digits for the reviewer, e.g. 246810}
+      NARAHEM_REVIEW_ACCOUNTS: '@demo.example.com,${NARAHEM_DEMO_REVIEWER:-}'
+    volumes:
+      - ${NARAHEM_DIR:-/opt/docker/narahem-demo}/server-data:/data
+    ports:
+      - '${NARAHEM_PORT:-8187}:8080' #plain HTTP, only for your proxy/tunnel
+    depends_on:
+      database:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+
+  # The made-up family: waits for first-run setup, then moves in and keeps driving around.
+  family:
+    image: ${NARAHEM_IMAGE:?Set NARAHEM_IMAGE to the published server image, e.g. ghcr.io/OWNER/nara-hem}:${NARAHEM_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    command: [python, -m, narahem.demo_family]
+    environment:
+      NARAHEM_PUBLIC_URL: ${NARAHEM_PUBLIC_URL}
+      DATABASE_URL: postgresql+psycopg://narahem:${NARAHEM_DB_PASSWORD}@database:5432/narahem
+      NARAHEM_DEMO_SERVER: http://narahem:8080
+      NARAHEM_REVIEW_CODE: ${NARAHEM_REVIEW_CODE}
+      NARAHEM_DEMO_PASSWORD: ${NARAHEM_DEMO_PASSWORD:?the reviewer's password, 12+ characters}
+      NARAHEM_DEMO_REVIEWER: ${NARAHEM_DEMO_REVIEWER:-review@demo.example.com} #optional
+    volumes:
+      - ${NARAHEM_DIR:-/opt/docker/narahem-demo}/family-data:/data # the family's phone keys
+    depends_on:
+      narahem:
+        condition: service_started
+    healthcheck:
+      disable: true
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, SETUID, SETGID]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+
+  database:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: narahem
+      POSTGRES_DB: narahem
+      POSTGRES_PASSWORD: ${NARAHEM_DB_PASSWORD}
+    volumes:
+      - ${NARAHEM_DIR:-/opt/docker/narahem-demo}/database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U narahem -d narahem']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt: [no-new-privileges:true]

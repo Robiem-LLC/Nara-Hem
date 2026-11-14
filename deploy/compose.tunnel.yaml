@@ -1,0 +1,21 @@
+# OPTIONAL: outbound-only Cloudflare Tunnel for operators who want origin privacy.
+# Use alongside compose.yaml, not instead of it.
+# Create a Cloudflare-managed tunnel and route your hostname to http://narahem:8080.
+# Save the connector token only in the deployment's private .env.
+services:
+  cloudflared:
+    # Pinned for reproducible deployments; raise deliberately after reviewing release notes.
+    image: cloudflare/cloudflared:${NARAHEM_CLOUDFLARED_TAG:-2026.10.0}
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${NARAHEM_CLOUDFLARE_TUNNEL_TOKEN:?Put tunnel token in your private .env}
+    depends_on:
+      narahem:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m

@@ -1,0 +1,4 @@
+# Pinned formatter and linter versions used by tools/format/run.sh and CI.
+ruff==0.17.4
+shellcheck-py==0.11.0.1
+shfmt-py==4.2.0

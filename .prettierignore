@@ -1,0 +1,13 @@
+# Generated or tool-owned files
+**/package-lock.json
+**/node_modules/
+**/build/
+**/dist/
+apps/webapp/backend/static/
+apps/ios/Resources/Assets.xcassets/
+
+# Formatted by their own language tools
+**/*.py
+**/*.kt
+**/*.kts
+**/*.swift

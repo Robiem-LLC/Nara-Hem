@@ -1,0 +1,35 @@
+# The showcase site on your own machine, published through a Cloudflare Tunnel.
+# In Cloudflare Zero Trust, create a tunnel, add a public hostname for the site
+# that points to http://site:8080, and put its token in this stack's .env
+# (or Portainer's environment variables) as SITE_TUNNEL_TOKEN.
+name: narahem-site
+
+services:
+  site:
+    image: ${SITE_IMAGE:?Set SITE_IMAGE to the published site image, e.g. ghcr.io/OWNER/nara-hem-site}:${SITE_TAG:-latest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+
+  cloudflared:
+    # Pinned for reproducible deployments; raise deliberately after reviewing release notes.
+    image: cloudflare/cloudflared:${CLOUDFLARED_TAG:-2026.10.0}
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${SITE_TUNNEL_TOKEN:?Put the tunnel token in your private .env}
+    depends_on:
+      site:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m

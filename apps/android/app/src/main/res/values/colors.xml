@@ -1,0 +1,4 @@
+<resources>
+    <!-- The deep blue of the app background (Theme.kt), so the window and splash match it. -->
+    <color name="narahem_midnight">#06143A</color>
+</resources>
