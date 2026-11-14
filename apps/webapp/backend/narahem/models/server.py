@@ -29,8 +29,6 @@ class Settings(Base):
     sms_quota: Mapped[int | None] = mapped_column(Integer)
     sms_error: Mapped[str | None] = mapped_column(Text)
     sms_checked: Mapped[float | None] = mapped_column(Float)
-    # Alexa skill ID and client secret, encrypted with the server key.
-    alexa: Mapped[str | None] = mapped_column(Text)
 
 
 class Outbox(Base):

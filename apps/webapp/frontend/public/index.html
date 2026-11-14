@@ -450,48 +450,9 @@
           <p><span class="pill" id="alexa-status"></span></p>
           <ul id="alexa-links" class="relay-list"></ul>
           <p class="subtle" id="alexa-store" hidden>
-            Use the Nära Hem skill from the Alexa store: in the Alexa app, enable
-            <strong>Nära Hem</strong>, enter this server's address,
-            <strong data-slot="alexa-address"></strong>, and sign in as the administrator.
+            In the Alexa app, enable the <strong>Nära Hem</strong> skill, enter this server's
+            address, <strong data-slot="alexa-address"></strong>, and sign in as the administrator.
           </p>
-          <details id="alexa-own">
-            <summary>Your own private skill</summary>
-            <form id="alexa-skill">
-              <label for="alexa-skill-id">Skill ID</label
-              ><input
-                id="alexa-skill-id"
-                name="skill_id"
-                type="text"
-                autocomplete="off"
-                placeholder="amzn1.ask.skill.…"
-                required
-              /><button type="submit">Save skill ID</button>
-            </form>
-            <p class="subtle">Paste these into your skill in the Alexa developer console:</p>
-            <label for="alexa-endpoint">Endpoint (HTTPS)</label
-            ><input id="alexa-endpoint" type="text" readonly /><label for="alexa-authorization"
-              >Web Authorization URI</label
-            ><input id="alexa-authorization" type="text" readonly /><label for="alexa-token"
-              >Access Token URI</label
-            ><input id="alexa-token" type="text" readonly /><label for="alexa-client-id"
-              >Your Client ID</label
-            ><input id="alexa-client-id" type="text" readonly /><label for="alexa-client-secret"
-              >Your Secret</label
-            >
-            <div class="secret-control">
-              <input id="alexa-client-secret" type="password" readonly /><button
-                type="button"
-                class="secondary secret-toggle"
-                aria-label="Show Your Secret"
-                aria-pressed="false"
-              >
-                Show
-              </button>
-            </div>
-            <div class="links">
-              <button id="alexa-new-secret" class="secondary">New secret</button>
-            </div>
-          </details>
         </section>
         <section class="card">
           <h2>Administrator password</h2>

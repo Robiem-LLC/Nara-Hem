@@ -1,15 +1,14 @@
-"""Alexa: "Alexa, ask Nara Hem where Maya is" and "... to find Maya's phone".
+"""Alexa: "Alexa, ask Nara Home where Maya is" and "... to find Maya's phone".
 
-Off unless the server is started with NARAHEM_ALLOW_ALEXA=true. The household's admin makes a
-private skill in their own Amazon developer account (docs/alexa.md) and links it by signing in
-with their admin email and password. The admin can revoke the link in Admin settings at any time,
-and changing the admin password ends it too.
+Off unless the server is started with NARAHEM_ALLOW_ALEXA=true. Households use the published Nära
+Hem skill from the Alexa store and link it by signing in with their admin email and password. The
+admin can revoke the link in Admin settings at any time, and changing the admin password ends it
+too.
 
-Households can also use the published Nära Hem skill from the Alexa store instead. Its requests
-come through the Nära Hem Alexa relay (deploy/cloudflare/alexa-relay-worker.mjs), which links to
-this server as a sign-in client with a PKCE check and keeps no database. The relay's address and
-the store skill's ID are built into official images (image_defaults.py) or set with
-NARAHEM_ALEXA_RELAY_URL and NARAHEM_ALEXA_STORE_SKILL_ID.
+The skill's requests come through the Nära Hem Alexa relay (deploy/cloudflare/
+alexa-relay-worker.mjs), which links to this server as a sign-in client with a PKCE check and
+keeps no database. The relay's address and the skill's ID are built into official images
+(image_defaults.py) or set with NARAHEM_ALEXA_RELAY_URL and NARAHEM_ALEXA_STORE_SKILL_ID.
 
 Alexa answers with what the admin's browser sees: everyone sharing their location. Rings are
 signed with the server's enrollment key, which the phones already accept from the admin.
@@ -30,7 +29,6 @@ import httpx
 from argon2.exceptions import VerificationError
 from fastapi import BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -45,19 +43,15 @@ from narahem.models import (
     FindPhoneCapability,
     LatestState,
     ServiceState,
-    Settings,
 )
-from narahem.schemas import FindCommandInput, Input
+from narahem.schemas import FindCommandInput
 
 ENVIRONMENT = "NARAHEM_ALLOW_ALEXA"
-CLIENT_ID = "nara-hem"
 RELAY_CLIENT_ID = "nara-hem-relay"
 SERVICE_ID = "0" * 32
 CODE_SECONDS = 300
 ACCESS_SECONDS = 3600
 
-# Where Amazon's Alexa app may send the admin back after signing in (one per region).
-REDIRECT_HOSTS = ("pitangui.amazon.com", "layla.amazon.com", "alexa.amazon.co.jp")
 _zones = {}
 # Alexa gives up after about 8 seconds, so the street address lookup gets at most this long.
 ADDRESS_SECONDS = 2.5
@@ -97,31 +91,16 @@ def challenge_for(verifier):
 
 
 def client_allowed(fields):
-    """Returns "own" or "store" for a sign-in request from Amazon or the Nära Hem relay with the
-    right return address, or None.
+    """Returns True for a sign-in request from the Nära Hem relay, with its return address and a
+    PKCE challenge.
     """
-    if fields["client_id"] == CLIENT_ID and redirect_allowed(fields["redirect_uri"]):
-        return "own"
     relay = store().get("relay")
-    if (
+    return bool(
         relay
         and fields["client_id"] == RELAY_CLIENT_ID
         and fields["redirect_uri"] == relay + "/callback"
         and fields.get("code_challenge_method") == "S256"
         and len(fields.get("code_challenge", "")) == 43
-    ):
-        return "store"
-    return None
-
-
-def redirect_allowed(uri):
-    """Returns True if uri is Amazon's account-linking return address."""
-    parts = urlsplit(uri or "")
-    return (
-        parts.scheme == "https"
-        and parts.hostname in REDIRECT_HOSTS
-        and parts.port is None
-        and parts.path.startswith("/api/skill/link/")
     )
 
 
@@ -166,18 +145,11 @@ def link_page(fields, error=""):
     )
 
 
-class SkillInput(Input):
-    """The skill ID from the Alexa developer console."""
-
-    skill_id: str = Field(pattern=r"^amzn1\.ask\.skill\.[0-9a-f-]{36}$")
-
-
 def install(
     app,
     *,
     admin,
     alert_memory,
-    cipher,
     database,
     engine,
     maps_key,
@@ -189,72 +161,25 @@ def install(
 ):
     """Registers the Alexa routes. Only called when the server allows Alexa."""
 
-    def settings(db):
-        """Returns the saved skill ID and client secret, creating the secret the first time."""
-        row = db.get(Settings, 1)
-        saved = json.loads(cipher.decrypt(row.alexa.encode())) if row.alexa else {}
-        if not saved.get("secret"):
-            saved["secret"] = secrets.token_urlsafe(32)
-            row.alexa = cipher.encrypt(json.dumps(saved).encode()).decode()
-            db.commit()
-        return saved
-
-    def save(db, saved):
-        """Encrypts and stores the Alexa settings."""
-        db.get(Settings, 1).alexa = cipher.encrypt(json.dumps(saved).encode()).decode()
-        db.commit()
-
     def status(db):
         """Returns everything the Admin settings card shows."""
-        saved = settings(db)
-        base = app.state.public_url
         links = db.scalars(
-            select(AlexaLink).where(AlexaLink.access.is_not(None)).order_by(AlexaLink.created)
+            select(AlexaLink)
+            .where(AlexaLink.access.is_not(None), AlexaLink.kind == "store")
+            .order_by(AlexaLink.created)
         )
-        published = store()
         return {
-            "store": bool(published),
-            "skill_id": saved.get("skill_id"),
-            "client_id": CLIENT_ID,
-            "client_secret": saved["secret"],
-            "authorization_url": base + "/alexa/link",
-            "token_url": base + "/alexa/token",
-            "endpoint": base + "/alexa/skill",
+            "store": bool(store()),
+            "address": app.state.public_url,
             "links": [
-                {
-                    "id": link.id,
-                    "kind": link.kind,
-                    "created": link.created,
-                    "last_used": link.last_used,
-                }
+                {"id": link.id, "created": link.created, "last_used": link.last_used}
                 for link in links
             ],
         }
 
     @app.get("/api/alexa")
     def alexa_status(auth=Depends(admin), db: Session = Depends(database)):
-        """Returns the Alexa skill settings and the linked Alexa accounts."""
-        return status(db)
-
-    @app.put("/api/alexa")
-    def alexa_skill(body: SkillInput, auth=Depends(admin), db: Session = Depends(database)):
-        """Saves the skill ID. Requests from any other skill are refused."""
-        saved = settings(db)
-        saved["skill_id"] = body.skill_id
-        save(db, saved)
-        audit(db, "alexa.skill.saved", auth[0].id)
-        db.commit()
-        return status(db)
-
-    @app.post("/api/alexa/secret")
-    def alexa_secret(auth=Depends(admin), db: Session = Depends(database)):
-        """Makes a new client secret and ends every link, for when the old one may be known."""
-        saved = settings(db)
-        saved["secret"] = secrets.token_urlsafe(32)
-        save(db, saved)
-        db.query(AlexaLink).delete()
-        audit(db, "alexa.secret.replaced", auth[0].id)
-        db.commit()
+        """Returns whether the store skill can link, and the linked Alexa accounts."""
         return status(db)
 
     @app.post("/api/alexa/links/{link_id}/revoke")
@@ -285,8 +210,7 @@ def install(
         """Checks the admin's email and password and sends Alexa back with a one-time code."""
         form = {k: v[0] for k, v in parse_qs((await request.body()).decode()).items()}
         fields = link_fields(form)
-        kind = client_allowed(fields)
-        if not kind:
+        if not client_allowed(fields):
             return link_page({}, "Start linking from the Nära Hem skill in the Alexa app.")
         rate(request, "alexa-link", 10)
         with Session(engine) as db:
@@ -313,8 +237,8 @@ def install(
                 code=digest(code),
                 code_expires=time.time() + CODE_SECONDS,
                 redirect_uri=fields["redirect_uri"],
-                kind=kind,
-                challenge=fields["code_challenge"] if kind == "store" else None,
+                kind="store",
+                challenge=fields["code_challenge"],
                 password_mark=digest(account.password),
                 created=time.time(),
             )
@@ -322,22 +246,11 @@ def install(
             db.query(AlexaLink).filter(
                 AlexaLink.access.is_(None), AlexaLink.code_expires < time.time()
             ).delete()
-            audit(db, "alexa.linked", account.id, link.id, kind=kind)
+            audit(db, "alexa.linked", account.id, link.id)
             db.commit()
         query = urlencode({"state": fields["state"], "code": code})
         joiner = "&" if "?" in fields["redirect_uri"] else "?"
         return RedirectResponse(fields["redirect_uri"] + joiner + query, status_code=303)
-
-    def client_secret(request, form):
-        """Returns the client ID and secret Amazon sent, by HTTP Basic or in the form."""
-        header = request.headers.get("authorization", "")
-        if header.startswith("Basic "):
-            try:
-                pair = base64.b64decode(header[6:]).decode()
-                return tuple(pair.split(":", 1))
-            except (ValueError, UnicodeDecodeError):
-                return "", ""
-        return form.get("client_id", ""), form.get("client_secret", "")
 
     def refused(error="invalid_grant"):
         """Returns an OAuth error."""
@@ -360,14 +273,11 @@ def install(
         """Amazon swaps the one-time code, or a refresh token, for an access token."""
         rate(request, "alexa-token", 120, shared=True)
         form = {k: v[0] for k, v in parse_qs((await request.body()).decode()).items()}
-        client, secret = client_secret(request, form)
-        relay = client == RELAY_CLIENT_ID and bool(store())
+        # The relay is a public client: its codes only ever go back to the relay's own address,
+        # and it must prove it started the sign-in (PKCE).
+        if form.get("client_id") != RELAY_CLIENT_ID or not store():
+            return JSONResponse({"error": "invalid_client"}, status_code=401)
         with Session(engine) as db:
-            expected = settings(db)["secret"]
-            # The relay is a public client: its codes only ever go back to the relay's own
-            # address, and it must prove it started the sign-in (PKCE).
-            if not relay and (client != CLIENT_ID or not secrets.compare_digest(secret, expected)):
-                return JSONResponse({"error": "invalid_client"}, status_code=401)
             grant = form.get("grant_type")
             if grant == "authorization_code":
                 link = db.scalar(
@@ -377,12 +287,9 @@ def install(
                     not link
                     or link.code_expires < time.time()
                     or link.redirect_uri != form.get("redirect_uri")
-                    or (link.kind == "store") != relay
-                    or (
-                        relay
-                        and not secrets.compare_digest(
-                            challenge_for(form.get("code_verifier", "")), link.challenge or ""
-                        )
+                    or link.kind != "store"
+                    or not secrets.compare_digest(
+                        challenge_for(form.get("code_verifier", "")), link.challenge or ""
                     )
                 ):
                     return refused()
@@ -395,7 +302,7 @@ def install(
                 )
             else:
                 return refused("unsupported_grant_type")
-            if link and (link.kind == "store") != relay:
+            if link and link.kind != "store":
                 return refused()
             if not current_link(db, link):
                 if link:
@@ -414,13 +321,14 @@ def install(
         }
 
     def household(db):
-        """Returns every active member as (account_id, name)."""
+        """Returns every active member with a name as (account_id, name)."""
         accounts = db.scalars(
             select(Account)
             .where(Account.status == "active", trusted_accounts())
             .order_by(Account.username)
         )
-        return [(a.id, member_name(db, a.id)) for a in accounts]
+        named = [(a.id, member_name(db, a.id, fallback=None)) for a in accounts]
+        return [member for member in named if member[1]]
 
     def time_zone(alexa):
         """Returns the Echo's time zone from Alexa's settings, remembered for an hour."""
@@ -577,9 +485,8 @@ def install(
 
     @app.post("/alexa/skill")
     async def skill(request: Request, background_tasks: BackgroundTasks):
-        """Answers Alexa. Requests for your own skill must be signed by Amazon. Requests for the
-        store skill come through the Nära Hem relay: signed by Amazon, or from the skill's
-        Amazon-hosted forwarder, which can't sign, carrying this server's own link token.
+        """Answers Alexa. Requests come through the Nära Hem relay: signed by Amazon, or from the
+        skill's Amazon-hosted forwarder, which can't sign, carrying this server's own link token.
         """
         raw = await request.body()
         try:
@@ -589,20 +496,14 @@ def install(
         except (ValueError, AttributeError):
             return JSONResponse({"detail": "Not a request from Amazon"}, 400)
         with Session(engine) as db:
-            skills = {"own": settings(db).get("skill_id"), "store": store().get("skill_id")}
-            kind = next((k for k, v in skills.items() if v and v == asked), None)
-            if not kind:
+            skill_id = store().get("skill_id")
+            if not skill_id or asked != skill_id:
                 return JSONResponse({"detail": "This server doesn't know that skill"}, 400)
-            # Through the relay, Amazon holds the relay's sealed token, and the relay passes this
-            # server's own token alongside the request.
-            token = (
-                request.headers.get("x-narahem-alexa-token")
-                if kind == "store"
-                else (system.get("user") or {}).get("accessToken")
-            ) or ""
-            signed = request.headers.get("signature-256") or kind == "own"
+            # Amazon holds the relay's sealed token, and the relay passes this server's own token
+            # alongside the request.
+            token = request.headers.get("x-narahem-alexa-token") or ""
             try:
-                if signed:
+                if request.headers.get("signature-256"):
                     alexa_verify.check(request.headers, raw, alexa)
                 elif token:
                     alexa_verify.recent(alexa)
@@ -614,7 +515,7 @@ def install(
             if (
                 not token
                 or not link
-                or link.kind != kind
+                or link.kind != "store"
                 or link.access_expires < time.time()
                 or not current_link(db, link)
             ):

@@ -559,65 +559,34 @@ function alexaCard(alexa, user) {
   pill.className = 'pill ' + (alexa.links.length ? 'ok' : '');
   pill.textContent = alexa.links.length
     ? 'Linked'
-    : alexa.store || alexa.skill_id
-      ? 'Not linked · enable the skill in the Alexa app'
-      : 'Not set up · see docs/alexa.md';
+    : alexa.store
+      ? 'Not linked · enable the Nära Hem skill in the Alexa app'
+      : "Not available · this server wasn't built with the Alexa relay";
   const store = document.getElementById('alexa-store');
   store.hidden = !alexa.store;
-  store.querySelector('[data-slot="alexa-address"]').textContent = alexa.endpoint.replace(
-    /\/alexa\/skill$/,
-    '',
-  );
-  // Without the store skill, a private skill is the only way, so show its settings.
-  document.getElementById('alexa-own').open = !alexa.store || Boolean(alexa.skill_id);
-  const values = {
-    'alexa-endpoint': alexa.endpoint,
-    'alexa-authorization': alexa.authorization_url,
-    'alexa-token': alexa.token_url,
-    'alexa-client-id': alexa.client_id,
-    'alexa-client-secret': alexa.client_secret,
-    'alexa-skill-id': alexa.skill_id || '',
-  };
-  for (const [id, value] of Object.entries(values)) document.getElementById(id).value = value;
-  const refresh = async (message) => {
-    await dashboard(user);
-    notice(message);
-  };
-  const run = (task, message) => async () => {
-    try {
-      await task();
-      await refresh(message);
-    } catch (e) {
-      notice(e.message);
-    }
-  };
+  store.querySelector('[data-slot="alexa-address"]').textContent = alexa.address;
   document.getElementById('alexa-links').replaceChildren(
     ...alexa.links.map((link) => {
       const item = document.createElement('li');
       const text = document.createElement('span');
       const revoke = document.createElement('button');
-      const skill = link.kind === 'store' ? 'Store skill' : 'Your own skill';
-      text.textContent = `${skill} · linked ${when(link.created)} · last used ${when(link.last_used)}`;
+      text.textContent = `Linked ${when(link.created)} · last used ${when(link.last_used)}`;
       revoke.className = 'secondary';
       revoke.textContent = 'Unlink';
-      revoke.onclick = run(async () => {
+      revoke.onclick = async () => {
         if (!confirm('Unlink this Alexa account? It will need to sign in again.')) return;
-        await api(`/api/alexa/links/${link.id}/revoke`, 'POST', {});
-      }, 'Alexa unlinked.');
+        try {
+          await api(`/api/alexa/links/${link.id}/revoke`, 'POST', {});
+          await dashboard(user);
+          notice('Alexa unlinked.');
+        } catch (e) {
+          notice(e.message);
+        }
+      };
       item.append(text, revoke);
       return item;
     }),
   );
-  bind('alexa-skill', async (data) => {
-    await api('/api/alexa', 'PUT', { skill_id: data.skill_id.trim() });
-    await refresh('Skill ID saved.');
-  });
-  document.getElementById('alexa-new-secret').onclick = run(async () => {
-    if (!confirm('Make a new secret? Alexa is unlinked until you paste it in and link again.')) {
-      return;
-    }
-    await api('/api/alexa/secret', 'POST', {});
-  }, 'New secret made. Paste it into the Alexa developer console, then link again.');
 }
 
 /** Shows the admin settings page. */

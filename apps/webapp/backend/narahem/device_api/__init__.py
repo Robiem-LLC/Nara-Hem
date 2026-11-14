@@ -336,8 +336,8 @@ def install(
         keep_memory(db, row, device.id, memory)
         raise_alerts(db, device, summary["ended_at"], [alert] if alert else [], now)
 
-    def member_name(db, account_id):
-        """Returns a member's display name from their latest profile, or a fallback."""
+    def member_name(db, account_id, fallback="A household member"):
+        """Returns a member's display name from their latest profile, or the fallback."""
         profile = db.get(LatestState, ("profile", account_id))
         record = db.get(EncryptedRecord, profile.record_id) if profile else None
         body = json.loads(record.envelope)["body"] if record else {}
@@ -349,7 +349,7 @@ def install(
             except HTTPException:
                 pass
         account = db.get(Account, account_id)
-        return (account.username if account and account.username else None) or "A household member"
+        return (account.username if account and account.username else None) or fallback
 
     def resolve_alert_addresses(db):
         """Names the location of pending alerts (a saved place reached shortly after the trip,
@@ -634,7 +634,6 @@ def install(
             app,
             admin=admin,
             alert_memory=alert_memory,
-            cipher=cipher,
             database=database,
             engine=engine,
             maps_key=maps_key,

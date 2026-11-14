@@ -20,8 +20,8 @@ class AlexaLink(Base):
     code: Mapped[str | None] = mapped_column(String(64), unique=True)
     code_expires: Mapped[float] = mapped_column(Float, default=0)
     redirect_uri: Mapped[str] = mapped_column(String(300))
-    # "store" for the published skill through the Nära Hem relay, "own" for a private skill.
-    kind: Mapped[str] = mapped_column(String(10), default="own", server_default="own")
+    # "store": linked through the Nära Hem relay, the only way to link.
+    kind: Mapped[str] = mapped_column(String(10), default="store", server_default="store")
     # The relay's PKCE challenge, checked when it swaps the code.
     challenge: Mapped[str | None] = mapped_column(String(64))
     access: Mapped[str | None] = mapped_column(String(64), unique=True)

@@ -422,13 +422,11 @@ def create_app(
         if request.url.path == "/alexa/link":
             from narahem import alexa_api
 
-            # After the admin signs in, the form sends the Alexa app back to Amazon, or to the
-            # Nära Hem relay for the store skill.
-            back = " ".join("https://" + host for host in alexa_api.REDIRECT_HOSTS)
+            # After the admin signs in, the form sends the Alexa app back to the Nära Hem relay.
             relay = alexa_api.store().get("relay")
             response.headers["Content-Security-Policy"] = response.headers[
                 "Content-Security-Policy"
-            ].replace("form-action 'self'", f"form-action 'self' {back} {relay or ''}".strip())
+            ].replace("form-action 'self'", f"form-action 'self' {relay or ''}".strip())
         return response
 
     @app.exception_handler(SQLAlchemyError)

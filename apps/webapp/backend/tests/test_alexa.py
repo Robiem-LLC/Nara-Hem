@@ -23,19 +23,18 @@ from narahem.data_service import canonical
 from narahem.models import Account, FindPhoneCommand, RosterRevision, ServiceState
 from tests import test_demo_family, test_relay, test_setup
 
-REDIRECT = "https://pitangui.amazon.com/api/skill/link/M2AAAAAAAAAAAA"
-SKILL = "amzn1.ask.skill.12345678-1234-1234-1234-123456789012"
-
-LINK = {
-    "client_id": alexa_api.CLIENT_ID,
-    "redirect_uri": REDIRECT,
-    "state": "amazon-state",
-    "response_type": "code",
-}
-
 STORE_SKILL = "amzn1.ask.skill.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 RELAY = "https://alexa-relay.example.invalid"
 STORE = {"NARAHEM_ALEXA_RELAY_URL": RELAY, "NARAHEM_ALEXA_STORE_SKILL_ID": STORE_SKILL}
+VERIFIER = "v" * 43
+LINK = {
+    "client_id": alexa_api.RELAY_CLIENT_ID,
+    "redirect_uri": RELAY + "/callback",
+    "state": "sealed-relay-state",
+    "response_type": "code",
+    "code_challenge": alexa_api.challenge_for(VERIFIER),
+    "code_challenge_method": "S256",
+}
 
 
 def now():
@@ -64,12 +63,14 @@ class AlexaOffTests(unittest.TestCase):
         self.assertEqual(reply.status_code, 404)
 
 
-@patch.dict(os.environ, {**test_demo_family.REVIEW, alexa_api.ENVIRONMENT: "true"})
+@patch.dict(os.environ, {**test_demo_family.REVIEW, alexa_api.ENVIRONMENT: "true", **STORE})
 @patch.object(demo_family.httpx, "get", test_demo_family.offline)
 @patch.object(alexa_api.household_alerts, "lookup_address", lambda *a: "Near 400 Elm St, Portland")
 @patch.object(alexa_verify, "check", lambda headers, body, request: None)
 class AlexaTests(unittest.TestCase):
-    """Linking Alexa with the admin's sign-in, asking where someone is and ringing a phone."""
+    """Linking the store skill through the relay (played here by the test) with the admin's
+    sign-in, asking where someone is and ringing a phone.
+    """
 
     start = test_relay.RelayTests.start
     tearDown = test_relay.RelayTests.tearDown
@@ -85,7 +86,7 @@ class AlexaTests(unittest.TestCase):
 
     def setUp(self):
         # The server decides at start-up whether it has Alexa addresses.
-        with patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true"}):
+        with patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true", **STORE}):
             test_relay.RelayTests.setUp(self)
 
     def move_in(self):
@@ -98,11 +99,10 @@ class AlexaTests(unittest.TestCase):
         return family
 
     def link(self):
-        """Links Alexa as Amazon does and returns the access and refresh tokens."""
-        status = self.client.get("/api/alexa").json()
-        self.client.put("/api/alexa", json={"skill_id": SKILL})
+        """Links Alexa as the relay does and returns the access and refresh tokens."""
         page = self.client.get("/alexa/link", params=LINK)
         self.assertIn("Link Nära Hem to Alexa", page.text)
+        self.assertIn(RELAY, page.headers["content-security-policy"])
         form = dict(LINK, email=test_setup.OWNER, password=test_setup.PASSWORD)
         signed = self.client.post(
             "/alexa/link",
@@ -112,58 +112,56 @@ class AlexaTests(unittest.TestCase):
         )
         self.assertEqual(signed.status_code, 303, signed.text)
         back = urlsplit(signed.headers["location"])
-        self.assertEqual(f"https://{back.hostname}{back.path}", REDIRECT)
+        self.assertEqual(f"https://{back.hostname}{back.path}", RELAY + "/callback")
         query = {k: v[0] for k, v in parse_qs(back.query).items()}
-        self.assertEqual(query["state"], "amazon-state")
-        tokens = self.exchange(
-            status["client_secret"],
+        self.assertEqual(query["state"], "sealed-relay-state")
+        swap = dict(
             grant_type="authorization_code",
             code=query["code"],
-            redirect_uri=REDIRECT,
+            redirect_uri=RELAY + "/callback",
+            code_verifier=VERIFIER,
         )
+        tokens = self.exchange(**swap)
         self.assertEqual(tokens.status_code, 200, tokens.text)
-        again = self.exchange(
-            status["client_secret"],
-            grant_type="authorization_code",
-            code=query["code"],
-            redirect_uri=REDIRECT,
-        )
-        self.assertEqual(again.status_code, 400, "a code works once")
-        return status["client_secret"], tokens.json()
+        self.assertEqual(self.exchange(**swap).status_code, 400, "a code works once")
+        return tokens.json()
 
-    def exchange(self, secret, **form):
-        """Calls the token address as Amazon does: a form, HTTP Basic, no Origin."""
-        basic = base64.b64encode(f"{alexa_api.CLIENT_ID}:{secret}".encode()).decode()
+    def exchange(self, client_id=alexa_api.RELAY_CLIENT_ID, **form):
+        """Calls the token address as the relay does: a form, no Origin."""
         return amazon(self.app).post(
             "/alexa/token",
-            content="&".join(f"{k}={v}" for k, v in form.items()).encode(),
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization": "Basic " + basic,
-            },
+            content="&".join(
+                f"{k}={v}" for k, v in dict(form, client_id=client_id).items()
+            ).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
 
     def ask(self, token, intent=None, person=None, attributes=None, kind="IntentRequest"):
         """Sends Alexa's request for an intent and returns the speech and the response."""
-        request = {"type": kind, "timestamp": "2026-11-13T00:00:00Z"}
+        request = {"type": kind, "timestamp": now()}
         if intent:
             request["intent"] = {"name": intent, "slots": {"person": {"value": person}}}
         body = {
             "version": "1.0",
             "session": {"attributes": attributes or {}},
             "context": {
-                "System": {"application": {"applicationId": SKILL}, "user": {"accessToken": token}}
+                "System": {
+                    "application": {"applicationId": STORE_SKILL},
+                    "user": {"accessToken": "sealed-by-the-relay"},
+                }
             },
             "request": request,
         }
-        reply = amazon(self.app).post("/alexa/skill", json=body)
+        # As from the skill's Amazon-hosted forwarder: the relay adds this server's own token.
+        headers = {"X-Narahem-Alexa-Token": token}
+        reply = amazon(self.app).post("/alexa/skill", json=body, headers=headers)
         self.assertEqual(reply.status_code, 200, reply.text)
         response = reply.json()
         return response["response"].get("outputSpeech", {}).get("text", ""), response
 
     def test_alexa_links_with_the_admin_sign_in_and_answers(self):
         family = self.move_in()
-        secret, tokens = self.link()
+        tokens = self.link()
         access = tokens["access_token"]
         self.assertIn("where someone is", self.ask(access, kind="LaunchRequest")[0])
 
@@ -203,9 +201,7 @@ class AlexaTests(unittest.TestCase):
         fetched = maya.device.get("/api/find-phone/command").json()
         self.assertEqual(fetched["command"]["body"]["id"], envelope["body"]["id"], fetched)
 
-        refreshed = self.exchange(
-            secret, grant_type="refresh_token", refresh_token=tokens["refresh_token"]
-        )
+        refreshed = self.exchange(grant_type="refresh_token", refresh_token=tokens["refresh_token"])
         self.assertEqual(refreshed.status_code, 200, refreshed.text)
         said, response = self.ask(access, "WhereIsIntent", "Maya")
         self.assertEqual(response["response"]["card"], {"type": "LinkAccount"}, "old token ends")
@@ -222,7 +218,7 @@ class AlexaTests(unittest.TestCase):
 
     def test_only_the_admin_can_link_and_a_new_password_ends_it(self):
         self.move_in()
-        secret, tokens = self.link()
+        tokens = self.link()
         form = dict(LINK, email="alex@" + demo_family.DOMAIN, password="anything at all")
         refused = self.client.post(
             "/alexa/link",
@@ -232,34 +228,38 @@ class AlexaTests(unittest.TestCase):
         )
         self.assertEqual(refused.status_code, 200)
         self.assertIn("isn&#x27;t the administrator", refused.text)
-        bad = dict(LINK, redirect_uri="https://evil.example/api/skill/link/x")
-        self.assertIn("Start linking", self.client.get("/alexa/link", params=bad).text)
-        self.assertEqual(self.exchange("wrong", grant_type="refresh_token").status_code, 401)
+        own = dict(
+            LINK,
+            client_id="nara-hem",
+            redirect_uri="https://pitangui.amazon.com/api/skill/link/x",
+        )
+        self.assertIn("Start linking", self.client.get("/alexa/link", params=own).text)
+        refused = self.exchange(client_id="nara-hem", grant_type="refresh_token")
+        self.assertEqual(refused.status_code, 401, "only the relay may swap codes")
         with Session(self.app.state.engine) as db:
             owner = db.scalar(select(Account).where(Account.role == "admin"))
             owner.password = HASHER.hash("a brand new admin password")
             db.commit()
         said, _ = self.ask(tokens["access_token"], "WhereIsIntent", "Maya")
         self.assertIn("link Nara Hem", said)
-        retry = self.exchange(
-            secret, grant_type="refresh_token", refresh_token=tokens["refresh_token"]
-        )
+        retry = self.exchange(grant_type="refresh_token", refresh_token=tokens["refresh_token"])
         self.assertEqual(retry.status_code, 400)
         self.assertEqual(self.client.get("/api/alexa").json()["links"], [])
 
     def test_requests_for_another_skill_are_refused(self):
         self.move_in()
-        _, tokens = self.link()
+        tokens = self.link()
         body = {
             "context": {
                 "System": {
-                    "application": {"applicationId": SKILL.replace("1234", "9999")},
-                    "user": {"accessToken": tokens["access_token"]},
+                    "application": {"applicationId": STORE_SKILL.replace("aaaa", "9999")},
+                    "user": {"accessToken": "sealed-by-the-relay"},
                 }
             },
-            "request": {"type": "LaunchRequest", "timestamp": "2026-11-13T00:00:00Z"},
+            "request": {"type": "LaunchRequest", "timestamp": now()},
         }
-        reply = amazon(self.app).post("/alexa/skill", json=body)
+        token = {"X-Narahem-Alexa-Token": tokens["access_token"]}
+        reply = amazon(self.app).post("/alexa/skill", json=body, headers=token)
         self.assertEqual(reply.status_code, 400)
 
 
@@ -283,15 +283,8 @@ class AlexaStoreTests(unittest.TestCase):
     family = test_demo_family.DemoFamilyTests.family
     move_in = AlexaTests.move_in
 
-    def relay_link(self, verifier="v" * 43):
-        fields = {
-            "client_id": alexa_api.RELAY_CLIENT_ID,
-            "redirect_uri": RELAY + "/callback",
-            "state": "sealed-relay-state",
-            "response_type": "code",
-            "code_challenge": alexa_api.challenge_for(verifier),
-            "code_challenge_method": "S256",
-        }
+    def relay_link(self):
+        fields = LINK
         page = self.client.get("/alexa/link", params=fields)
         self.assertIn("Administrator email", page.text)
         self.assertIn(RELAY, page.headers["content-security-policy"])
@@ -362,7 +355,7 @@ class AlexaStoreTests(unittest.TestCase):
         self.assertEqual(wrong.json()["response"]["card"], {"type": "LinkAccount"})
         links = self.client.get("/api/alexa").json()
         self.assertTrue(links["store"])
-        self.assertEqual([link["kind"] for link in links["links"]], ["store"])
+        self.assertEqual(len(links["links"]), 1)
         refresh = self.relay_token(
             grant_type="refresh_token",
             refresh_token=tokens.json()["refresh_token"],
@@ -383,9 +376,9 @@ class AlexaStoreTests(unittest.TestCase):
         self.assertIn("Start linking", self.client.get("/alexa/link", params=bad).text)
 
 
-@patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true", **STORE})
-class AlexaSignatureRequiredTests(unittest.TestCase):
-    """A private skill's requests must always carry Amazon's signature."""
+@patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true"})
+class AlexaWithoutRelayTests(unittest.TestCase):
+    """A server built without the Alexa relay can't be linked or asked anything."""
 
     start = test_relay.RelayTests.start
     tearDown = test_relay.RelayTests.tearDown
@@ -394,13 +387,15 @@ class AlexaSignatureRequiredTests(unittest.TestCase):
     configure = test_relay.RelayTests.configure
 
     def setUp(self):
-        with patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true", **STORE}):
+        with patch.dict(os.environ, {alexa_api.ENVIRONMENT: "true"}):
             test_relay.RelayTests.setUp(self)
 
-    def test_unsigned_requests_for_a_private_skill_are_refused(self):
-        self.client.put("/api/alexa", json={"skill_id": SKILL})
+    def test_nothing_links_or_answers(self):
+        status = self.client.get("/api/alexa").json()
+        self.assertEqual((status["store"], status["links"]), (False, []))
+        self.assertIn("Start linking", self.client.get("/alexa/link", params=LINK).text)
         body = {
-            "context": {"System": {"application": {"applicationId": SKILL}, "user": {}}},
+            "context": {"System": {"application": {"applicationId": STORE_SKILL}, "user": {}}},
             "request": {"type": "LaunchRequest", "timestamp": now()},
         }
         reply = amazon(self.app).post(
