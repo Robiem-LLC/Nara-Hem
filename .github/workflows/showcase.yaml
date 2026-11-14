@@ -37,6 +37,9 @@ jobs:
       (github.event_name == 'push' || inputs.phones)
     runs-on: [self-hosted, macOS, ARM64, narahem-ios]
     timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: write
     env:
       JAVA_HOME: /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
       ANDROID_HOME: /Users/narahemci/Library/Android/sdk
@@ -171,6 +174,13 @@ jobs:
         run: |
           adb emu kill 2>/dev/null || true
           [ -n "${SHOWCASE_SIMULATOR:-}" ] && xcrun simctl shutdown "$SHOWCASE_SIMULATOR" 2>/dev/null || true
+      - name: Make room for build files (oldest deleted first)
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUDGET_MB: ${{ vars.NARAHEM_ARTIFACT_BUDGET_MB || '250' }}
+        run: python3 ci/artifact_budget.py --budget-mb "$BUDGET_MB" --reserve "$RUNNER_TEMP/phones"
       - name: Upload the phone recordings
         if: always()
         # When GitHub's artifact storage is full, the site keeps the phone videos it already has.
@@ -193,6 +203,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -281,6 +292,12 @@ jobs:
           docker logout ghcr.io >/dev/null 2>&1 || true
           python3 site/build.py "$RUNNER_TEMP/media" "$RUNNER_TEMP/site" > "$RUNNER_TEMP/build.log" 2>&1 || report 'Building the site failed'
           du -sh "$RUNNER_TEMP/site" >> "$GITHUB_STEP_SUMMARY"
+      - name: Make room for build files (oldest deleted first)
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUDGET_MB: ${{ vars.NARAHEM_ARTIFACT_BUDGET_MB || '250' }}
+        run: python3 ci/artifact_budget.py --budget-mb "$BUDGET_MB" --reserve "$RUNNER_TEMP/site" "$RUNNER_TEMP/recording"
       - name: Upload the site
         # A copy to download; the published image doesn't depend on it.
         continue-on-error: true
