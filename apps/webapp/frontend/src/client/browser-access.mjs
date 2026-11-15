@@ -75,23 +75,25 @@ export async function locked() {
       const h = await state.api('/api/household');
       state.key = await T.createKey();
       state.salt = crypto.getRandomValues(new Uint8Array(16));
-      state.vault = C.keys(state.user.id, h.id, state.user.role === 'admin' ? 'Admin' : 'Browser');
+      // Shared only once the server has stored it, so nothing uses it without a credential.
+      const vault = C.keys(state.user.id, h.id, state.user.role === 'admin' ? 'Admin' : 'Browser');
       const registration = {
         domain: 'narahem.device.v1',
         household: h.id,
-        ...C.identity(state.vault),
+        ...C.identity(vault),
         platform: 'web',
       };
       await T.putKey(state.context, state.key);
       const result = await state.api('/api/devices/register', 'POST', {
-        id: state.vault.id,
-        name: state.vault.name,
-        signing_key: state.vault.signing_key,
-        box_key: state.vault.box_key,
+        id: vault.id,
+        name: vault.name,
+        signing_key: vault.signing_key,
+        box_key: vault.box_key,
         platform: 'web',
-        signature: C.sign(registration, state.vault.signing_secret),
+        signature: C.sign(registration, vault.signing_secret),
       });
-      state.vault.credential = result.credential;
+      vault.credential = result.credential;
+      state.vault = vault;
       await save();
       await screen();
     });

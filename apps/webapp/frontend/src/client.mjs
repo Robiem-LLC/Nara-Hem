@@ -13,6 +13,38 @@ import { freshness, screen } from './client/map-screen.mjs';
 import { state } from './client/state.mjs';
 import * as mailPresets from './mail-presets.mjs';
 
+/**
+ * Registers this browser as one of the administrator's devices. The vault is only shared once
+ * the server has stored it, so no request goes out with a device the server doesn't know yet.
+ */
+async function registerAdminBrowser() {
+  const h = await state.api('/api/household');
+  const key = await T.createKey();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const vault = C.keys(state.user.id, h.id, 'Admin');
+  const registration = {
+    domain: 'narahem.device.v1',
+    household: h.id,
+    ...C.identity(vault),
+    platform: 'web',
+  };
+  const result = await state.api('/api/devices/register', 'POST', {
+    id: vault.id,
+    name: 'Admin',
+    signing_key: vault.signing_key,
+    box_key: vault.box_key,
+    platform: 'web',
+    signature: C.sign(registration, vault.signing_secret),
+  });
+
+  vault.credential = result.credential;
+  state.key = key;
+  state.salt = salt;
+  state.vault = vault;
+  await T.putKey(state.context, key);
+  await save();
+}
+
 window.FamilyClient = {
   /** Email provider presets for the admin email form in app.js. */
   mailPresets,
@@ -50,27 +82,12 @@ window.FamilyClient = {
         crypto.subtle &&
         !localStorage.getItem(state.storeKey)
       ) {
-        const h = await state.api('/api/household');
-        state.key = await T.createKey();
-        state.salt = crypto.getRandomValues(new Uint8Array(16));
-        state.vault = C.keys(state.user.id, h.id, 'Admin');
-        const registration = {
-          domain: 'narahem.device.v1',
-          household: h.id,
-          ...C.identity(state.vault),
-          platform: 'web',
-        };
-        const result = await state.api('/api/devices/register', 'POST', {
-          id: state.vault.id,
-          name: 'Admin',
-          signing_key: state.vault.signing_key,
-          box_key: state.vault.box_key,
-          platform: 'web',
-          signature: C.sign(registration, state.vault.signing_secret),
+        // Two screens can open at once (sign-in shows the map while Manage household opens):
+        // both wait for one registration instead of registering twice.
+        state.registering ??= registerAdminBrowser().finally(() => {
+          state.registering = null;
         });
-        state.vault.credential = result.credential;
-        await T.putKey(state.context, state.key);
-        await save();
+        await state.registering;
       }
       if (state.vault) {
         const loading = screen();

@@ -23,6 +23,7 @@ export const state = {
   notice: undefined,
   view: undefined,
   vault: undefined,
+  registering: null,
   key: undefined,
   salt: undefined,
   context: undefined,
