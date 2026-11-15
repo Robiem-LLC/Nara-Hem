@@ -95,6 +95,8 @@ class PhoneLocationRepository(context: Context) : LocationRepository {
      * them. Updates arrive through provider callbacks, which wake the CPU in a way a coroutine
      * delay can't.
      */
+    // Callers only start a watch with location allowed; a SecurityException reaches them.
+    @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     fun watch(
         intervalMs: Long,

@@ -20,7 +20,7 @@ services:
     volumes:
       - server-data:/data
       # Readable redacted diagnostic reports, e.g. for a Windows file share.
-      - ${NARAHEM_EXPORTS_PATH:-./exports}:/exports
+      - ./exports:/exports
     ports:
       - '${NARAHEM_BIND_ADDRESS:-127.0.0.1}:${NARAHEM_PORT:-8186}:8080'
     read_only: true

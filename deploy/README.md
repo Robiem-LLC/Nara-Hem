@@ -84,8 +84,7 @@ HTTPS in front of it (next section).
 | `NARAHEM_IOS_APP_URL`, `NARAHEM_ANDROID_APP_URL` | built into official images | If you build your own apps, point the invitation links to them; `none` leaves one out.    |
 | `NARAHEM_ALLOW_HTTP`                             | `0`                        | `1` allows plain HTTP for testing on your own network only. Never for normal use.         |
 
-Docker Compose also reads `NARAHEM_BIND_ADDRESS` (where the port listens) and
-`NARAHEM_EXPORTS_PATH` (the diagnostic reports folder).
+Docker Compose also reads `NARAHEM_BIND_ADDRESS` (where the port listens).
 
 ## Reaching your server
 
