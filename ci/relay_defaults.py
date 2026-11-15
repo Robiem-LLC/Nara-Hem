@@ -1,7 +1,8 @@
 """Writes the settings built into an official image, from CI secrets.
 
-The push and Alexa relay addresses, the store Alexa skill's ID and the app download links, so a
-server works without setting them (apps/webapp/backend/narahem/image_defaults.py). Only valid
+The push and Alexa relay addresses, the store Alexa skill's ID, the app download links and the
+source code link, so a server works without setting them
+(apps/webapp/backend/narahem/image_defaults.py). Only valid
 values are written to the given file (mode 0600). Relay tokens are never written: images may be
 public, so each server supplies its own token. Prints a summary that names what is configured,
 never values.
@@ -47,6 +48,7 @@ DEFAULTS = {
     ),
     "NARAHEM_IOS_APP_URL": ("iPhone app link", https_url),
     "NARAHEM_ANDROID_APP_URL": ("Android app link", https_url),
+    "NARAHEM_SOURCE_URL": ("Source code link", https_url),
 }
 
 

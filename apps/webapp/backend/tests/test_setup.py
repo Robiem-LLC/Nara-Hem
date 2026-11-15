@@ -1076,6 +1076,7 @@ class SetupTests(unittest.TestCase):
             "NARAHEM_BUILD_NUMBER": "591",
             "NARAHEM_BUILD_COMMIT": "c399c6c" + "0" * 33,
             "NARAHEM_BUILD_UTC": "2026-10-26T00:45Z",
+            "NARAHEM_SOURCE_URL": "https://source.example.invalid/nara-hem",
         }
         with patch.dict("os.environ", build):
             self.assertEqual(
@@ -1085,13 +1086,20 @@ class SetupTests(unittest.TestCase):
                     "build": "591",
                     "commit": "c399c6c",
                     "built": "2026-10-26T00:45Z",
+                    "source": "https://source.example.invalid/nara-hem",
                 },
             )
         with patch.dict(
             "os.environ",
-            {"NARAHEM_BUILD_CHANNEL": "local", "NARAHEM_BUILD_COMMIT": "not-a-commit"},
+            {
+                "NARAHEM_BUILD_CHANNEL": "local",
+                "NARAHEM_BUILD_COMMIT": "not-a-commit",
+                "NARAHEM_SOURCE_URL": "javascript:alert(1)",
+            },
         ):
-            self.assertEqual(self.client.get("/api/version").json()["commit"], None)
+            version = self.client.get("/api/version").json()
+            self.assertEqual(version["commit"], None)
+            self.assertEqual(version["source"], None)
 
     def test_default_map_configuration_requires_login(self):
         self.assertEqual(self.client.get("/api/maps").status_code, 401)

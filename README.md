@@ -35,7 +35,7 @@ See [SECURITY.md](SECURITY.md).
 ## License
 
 Copyright © 2026 Robiem LLC. Nära Hem is free software under the
-[GNU Affero General Public License v3.0](LICENSE): you may use, change and share it, and if you run
+[GNU Affero General Public License, version 3 or later](LICENSE): you may use, change and share it, and if you run
 a changed version as a service for others, you must offer them its source code.
 
 ### Additional permissions (AGPL section 7)

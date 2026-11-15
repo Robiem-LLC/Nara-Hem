@@ -18,5 +18,5 @@
     "playwright": "1.62.1"
   },
   "private": true,
-  "license": "AGPL-3.0-only"
+  "license": "AGPL-3.0-or-later"
 }

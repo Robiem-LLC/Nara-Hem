@@ -47,10 +47,6 @@
         <button id="review-device-requests" class="secondary">Review requests</button>
       </div>
       <div id="view"><p>Connecting to your server…</p></div>
-      <footer>
-        Your server stores encrypted household data. Background tracking requires a native phone
-        app. <span id="server-version"></span>
-      </footer>
     </main>
 
     <!--
@@ -518,6 +514,19 @@
             </div>
             <button type="submit">Change password</button>
           </form>
+        </section>
+        <section class="card" id="about-card">
+          <h2>About</h2>
+          <p><strong>Nära Hem</strong> · <span id="about-version">Server build unknown</span></p>
+          <p class="subtle">
+            Free software under the GNU Affero General Public License, version 3 or later. You may
+            use, change and share it; anyone running a changed version for others must offer them
+            its source code.
+          </p>
+          <p id="about-source" hidden>
+            <a target="_blank" rel="noopener noreferrer">Source code</a>
+          </p>
+          <p>Questions or problems: <a href="mailto:dev@robiem.com">dev@robiem.com</a></p>
         </section>
       </div></template
     >

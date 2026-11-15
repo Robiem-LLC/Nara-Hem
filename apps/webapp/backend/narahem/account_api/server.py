@@ -12,6 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from narahem import image_defaults
 from narahem.app import (
     HASHER,
     digest,
@@ -35,13 +36,17 @@ def install(app, *, bootstrap_file, current, database, directory, public_url, ra
 
     @app.get("/api/version")
     def server_version(auth=Depends(current)):
-        """Returns the server build information to signed-in users."""
+        """Returns the server build information, and where its source code is published, to
+        signed-in users.
+        """
         commit = os.environ.get("NARAHEM_BUILD_COMMIT", "")
+        source = image_defaults.setting("NARAHEM_SOURCE_URL")
         return {
             "channel": os.environ.get("NARAHEM_BUILD_CHANNEL", "local"),
             "build": os.environ.get("NARAHEM_BUILD_NUMBER", "") or None,
             "commit": commit[:7] if re.fullmatch(r"[0-9a-f]{7,40}", commit) else None,
             "built": os.environ.get("NARAHEM_BUILD_UTC", "") or None,
+            "source": source if source.startswith("https://") else None,
         }
 
     @app.get("/healthz")

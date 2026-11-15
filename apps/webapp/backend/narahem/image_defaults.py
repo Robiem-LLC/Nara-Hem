@@ -1,6 +1,7 @@
 """Settings built into official images by CI (ci/relay_defaults.py), so a server works without
-setting them: the push and Alexa relay addresses, the store Alexa skill's ID and the app download
-links. Other builds have none. Environment variables always win, and tokens are never built in.
+setting them: the push and Alexa relay addresses, the store Alexa skill's ID, the app download
+links and where the source code is published. Other builds have none. Environment variables
+always win, and tokens are never built in.
 """
 
 import json
@@ -14,6 +15,7 @@ NAMES = (
     "NARAHEM_ALEXA_STORE_SKILL_ID",
     "NARAHEM_IOS_APP_URL",
     "NARAHEM_ANDROID_APP_URL",
+    "NARAHEM_SOURCE_URL",
 )
 
 

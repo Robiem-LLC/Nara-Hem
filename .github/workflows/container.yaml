@@ -204,6 +204,7 @@ jobs:
           NARAHEM_ALEXA_STORE_SKILL_ID: ${{ secrets.NARAHEM_ALEXA_STORE_SKILL_ID || vars.NARAHEM_ALEXA_STORE_SKILL_ID }}
           NARAHEM_IOS_APP_URL: ${{ secrets.NARAHEM_IOS_APP_URL || vars.NARAHEM_IOS_APP_URL }}
           NARAHEM_ANDROID_APP_URL: ${{ secrets.NARAHEM_ANDROID_APP_URL || vars.NARAHEM_ANDROID_APP_URL || format('{0}/{1}/releases/latest/download/NaraHem-Android.apk', github.server_url, github.repository) }}
+          NARAHEM_SOURCE_URL: ${{ format('{0}/{1}', github.server_url, github.repository) }}
         run: |
           set -euo pipefail
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
@@ -250,6 +251,7 @@ jobs:
           NARAHEM_ALEXA_STORE_SKILL_ID: ${{ secrets.NARAHEM_ALEXA_STORE_SKILL_ID || vars.NARAHEM_ALEXA_STORE_SKILL_ID }}
           NARAHEM_IOS_APP_URL: ${{ secrets.NARAHEM_IOS_APP_URL || vars.NARAHEM_IOS_APP_URL }}
           NARAHEM_ANDROID_APP_URL: ${{ secrets.NARAHEM_ANDROID_APP_URL || vars.NARAHEM_ANDROID_APP_URL || format('{0}/{1}/releases/latest/download/NaraHem-Android.apk', github.server_url, github.repository) }}
+          NARAHEM_SOURCE_URL: ${{ format('{0}/{1}', github.server_url, github.repository) }}
         run: |
           set -euo pipefail
           channel="$GITHUB_REF_NAME"

@@ -599,12 +599,13 @@ async function dashboard(user) {
     await manageHousehold(user);
     return;
   }
-  const [status, mail, relays, texting, alexa] = await Promise.all([
+  const [status, mail, relays, texting, alexa, version] = await Promise.all([
     api('/api/admin'),
     api('/api/mail'),
     api('/api/push/relays').catch(() => ({ relays: [] })),
     api('/api/texting').catch(() => null),
     api('/api/alexa').catch(() => null),
+    api('/api/version').catch(() => null),
   ]);
   if (
     activeSection !== 'settings' ||
@@ -632,6 +633,7 @@ async function dashboard(user) {
   showRelays(relays.relays);
   textingCard(texting, user);
   alexaCard(alexa, user);
+  aboutCard(version);
   document.getElementById('register-relays').onclick = async () => {
     try {
       showRelays((await api('/api/push/relays/register', 'POST', {})).relays);
@@ -696,6 +698,24 @@ async function dashboard(user) {
         notice(e.message);
       }
     };
+  }
+}
+
+/** Fills the About section: this server's build and where its source code is published. */
+function aboutCard(version) {
+  if (!version) return;
+  const details = [
+    version.channel,
+    version.build && 'build ' + version.build,
+    version.commit,
+    version.built && version.built.slice(0, 10),
+  ];
+  document.getElementById('about-version').textContent =
+    'Server ' + details.filter(Boolean).join(' · ');
+  const source = document.getElementById('about-source');
+  if (version.source?.startsWith('https://')) {
+    source.querySelector('a').href = version.source;
+    source.hidden = false;
   }
 }
 
@@ -1267,15 +1287,6 @@ async function load() {
   logout.hidden = false;
   document.getElementById('app-nav').hidden = false;
   document.getElementById('open-settings').hidden = currentUser.role !== 'admin';
-  api('/api/version')
-    .then((v) => {
-      document.getElementById('server-version').textContent =
-        'Server ' +
-        [v.channel, v.build && 'build ' + v.build, v.commit, v.built && v.built.slice(0, 10)]
-          .filter(Boolean)
-          .join(' · ');
-    })
-    .catch(() => {});
   if (deviceAlertTimer) clearInterval(deviceAlertTimer);
   deviceAlertTimer = setInterval(() => {
     refreshDeviceAlerts().catch(() => {});

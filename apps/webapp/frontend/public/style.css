@@ -123,8 +123,7 @@ h2 {
 h3 {
   font-size: 16px;
 }
-.subtle,
-footer {
+.subtle {
   color: var(--text-subdued);
   line-height: 1.6;
 }
@@ -263,10 +262,6 @@ code {
 .member small {
   display: block;
   color: var(--text-subdued);
-}
-footer {
-  font-size: 12px;
-  margin-top: 36px;
 }
 .links {
   display: flex;

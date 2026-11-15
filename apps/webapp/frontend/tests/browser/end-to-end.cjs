@@ -43,6 +43,9 @@ const BACKEND = path.resolve(__dirname, '../../../backend');
         NARAHEM_PUBLIC_URL: origin,
         NARAHEM_ALLOW_HTTP: '1',
         NARAHEM_ALERT_ADDRESSES: '0',
+        NARAHEM_BUILD_CHANNEL: 'dev',
+        NARAHEM_BUILD_NUMBER: '1234',
+        NARAHEM_SOURCE_URL: 'https://source.example.invalid/nara-hem',
         NARAHEM_GOOGLE_MAPS_API_KEY:
           process.env.NARAHEM_TEST_MAP_PROVIDER === 'google' ? 'synthetic-browser-key' : '',
       },
@@ -191,6 +194,15 @@ const BACKEND = path.resolve(__dirname, '../../../backend');
     await page.getByRole('heading', { name: 'Admin settings', exact: true }).waitFor();
     await page.getByRole('heading', { name: 'Storage and retention', exact: true }).waitFor();
     assert.equal(await page.locator('#mail').isVisible(), false, 'Settings sections start closed');
+    // About: the build, the source code link (AGPL) and how to reach the developer.
+    await page.locator('.settings-section > summary').filter({ hasText: 'About' }).click();
+    await page.getByText('Server dev · build 1234', { exact: false }).waitFor();
+    assert.equal(
+      await page.getByRole('link', { name: 'Source code' }).getAttribute('href'),
+      'https://source.example.invalid/nara-hem',
+    );
+    await page.getByRole('link', { name: 'dev@robiem.com' }).waitFor();
+    await page.locator('.settings-section > summary').filter({ hasText: 'About' }).click();
     // Opened sections stay open when the page redraws after a save.
     for (const name of ['Email', 'Storage and retention']) {
       await page.locator('.settings-section > summary').filter({ hasText: name }).click();
