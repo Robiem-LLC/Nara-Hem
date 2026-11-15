@@ -5,7 +5,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['**/node_modules/', '**/build/', '**/dist/', 'apps/webapp/backend/static/'],
+    ignores: ['**/node_modules/', '**/build/', '**/dist/', '.venv/', 'apps/webapp/backend/static/'],
   },
   js.configs.recommended,
   {

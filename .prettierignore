@@ -1,6 +1,7 @@
 # Generated or tool-owned files
 **/package-lock.json
 **/node_modules/
+.venv/
 **/build/
 **/dist/
 apps/webapp/backend/static/

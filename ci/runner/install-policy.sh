@@ -21,11 +21,11 @@ SIGNERS="$HERE/../../.github/allowed_signers"
 case "$KIND" in
   mac)
     GROUP=wheel
-    WORKFLOWS='ios-mac.yaml android.yaml showcase.yaml'
+    WORKFLOWS=(ios-mac.yaml android.yaml showcase.yaml)
     ;;
   linux)
     GROUP=root
-    WORKFLOWS='format.yaml container.yaml android-tests.yaml linux-runner-smoke.yaml showcase.yaml'
+    WORKFLOWS=(format.yaml container.yaml android-tests.yaml linux-runner-smoke.yaml showcase.yaml)
     ;;
   *) usage ;;
 esac
@@ -52,7 +52,7 @@ install -o root -g "$GROUP" -m 644 "$HERE/guard.py" "$POLICY/guard.py"
 install -o root -g "$GROUP" -m 644 "$SIGNERS" "$POLICY/allowed_signers"
 printf '%s\n' "$REPOSITORY" > "$POLICY/repository"
 printf '%s\n' "$ACCOUNT" > "$POLICY/actors"
-printf '%s\n' $WORKFLOWS > "$POLICY/workflows"
+printf '%s\n' "${WORKFLOWS[@]}" > "$POLICY/workflows"
 if [[ "$KIND" == linux ]]; then
   install -o root -g "$GROUP" -m 755 "$HERE/job-started-linux.sh" "$POLICY/job-started.sh"
 fi
@@ -62,6 +62,6 @@ for file in repository actors workflows; do
 done
 echo "Guard installed in $POLICY for $REPOSITORY."
 echo "Jobs may be started by: $ACCOUNT"
-echo "Workflows this runner runs: $WORKFLOWS"
+echo "Workflows this runner runs: ${WORKFLOWS[*]}"
 echo 'Commits must be signed with:'
 cut -d' ' -f1-2 "$POLICY/allowed_signers"
