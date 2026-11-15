@@ -6,7 +6,7 @@ If something goes wrong, see [troubleshooting](../docs/troubleshooting.md).
 
 ## Before you start
 
-- **A computer that runs Docker** around the clock, such as a home server or NAS.
+- **An always on computer running Docker**.
 - **A domain name** for the server's HTTPS address, e.g. `family.example.com`. The phone apps only
   connect over HTTPS (see [Reaching your server](#reaching-your-server)).
 - **An email account that can send mail by SMTP**, such as your provider's SMTP server with an app
