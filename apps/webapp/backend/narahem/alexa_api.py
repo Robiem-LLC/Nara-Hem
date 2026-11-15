@@ -1,4 +1,4 @@
-"""Alexa: "Alexa, ask Nara Home where Maya is" and "... to find Maya's phone".
+"""Alexa: "Alexa, ask Close to Home where Maya is" and "... to find Maya's phone".
 
 Off unless the server is started with NARAHEM_ALLOW_ALEXA=true. Households use the published Nära
 Hem skill from the Alexa store and link it by signing in with their admin email and password. The

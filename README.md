@@ -7,7 +7,7 @@ Android apps and the browser connect to it.
   arrives or leaves.
 - **Trips:** each drive, with distance, top speed and the route.
 - **Find my phone:** ring a household member's phone, if they've turned it on in the app.
-- **Alexa (optional):** "Alexa, ask Nara Home where Sam is."
+- **Alexa (optional):** "Alexa, ask Close to Home where Sam is."
 
 **Your household server can read everyone's locations, trips, saved places and profile photos.**
 See [what the server can see](docs/security-model.md#what-the-server-can-see). New phones and

@@ -2,9 +2,9 @@
 
 Ask an Echo about your household:
 
-- "Alexa, ask Nara Home where Sam is." → "Sam has been at Home since 4:30 PM."
-- "Alexa, ask Nara Home where Maya is." → "Maya is driving near Route 9, Springfield."
-- "Alexa, ask Nara Home to find Sam's phone." → "Ringing Sam's phone now."
+- "Alexa, ask Close to Home where Sam is." → "Sam has been at Home since 4:30 PM."
+- "Alexa, ask Close to Home where Maya is." → "Maya is driving near Route 9, Springfield."
+- "Alexa, ask Close to Home to find Sam's phone." → "Ringing Sam's phone now."
 
 If Alexa mishears a name, it asks "Did you mean Maya?" when a household member's name is close.
 Answer yes or no.
@@ -27,7 +27,7 @@ Answer yes or no.
    use**.
 3. Enter your server's address (shown in **Admin settings → Alexa**), then sign in with your Nära
    Hem administrator email and password.
-4. Say "Alexa, ask Nara Home where _someone_ is."
+4. Say "Alexa, ask Close to Home where _someone_ is."
 
 ## Unlinking
 
@@ -41,7 +41,7 @@ Answer yes or no.
 - **"Please link Nara Hem…"**: the link was removed or the administrator password changed. Link
   again from the Alexa app.
 - **"I'm not sure how to help with that"**: Alexa didn't hear the skill's name. Say "Alexa, open
-  Nara Home" first, and check the Alexa app's voice history for what it heard.
+  Close to Home" first, and check the Alexa app's voice history for what it heard.
 - **A name isn't recognised**: Alexa matches first names best. Use the name shown in the app.
 - **Admin settings says "Not available"**: your server was built without the Alexa relay. Official
   images have it; for your own build, set `NARAHEM_ALEXA_RELAY_URL` and

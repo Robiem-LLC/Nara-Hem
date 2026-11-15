@@ -1,7 +1,7 @@
 {
   "interactionModel": {
     "languageModel": {
-      "invocationName": "nara home",
+      "invocationName": "close to home",
       "intents": [
         {
           "name": "WhereIsIntent",
