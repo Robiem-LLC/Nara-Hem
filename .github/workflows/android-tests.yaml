@@ -48,4 +48,4 @@ jobs:
             -v narahem-android-gradle:/gradle -e GRADLE_USER_HOME=/gradle \
             -e OWNER="$(id -u):$(id -g)" -e CHECKOUT="$GITHUB_WORKSPACE" \
             cimg/android:2026.10.1@sha256:4e5677b17e50ea9b478f9b88071cf58dbd751ae4d62f296c676dd47e99a88e4b \
-            bash -c 'status=0; { bash gradlew :app:ktlintCheck :app:testOsmDebugUnitTest :app:lintOsmDebug --no-daemon && NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY=synthetic-ci-key-not-for-device-use bash gradlew :app:testGoogleDebugUnitTest :app:lintGoogleDebug --no-daemon; } || status=$?; chown -R "$OWNER" "$CHECKOUT"; exit $status'
+            bash -c 'status=0; { bash gradlew :app:ktlintCheck :app:testOsmDebugUnitTest :app:lintOsmDebug --no-daemon && NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY=synthetic-ci-key-not-for-device-use bash gradlew :app:testGoogleDebugUnitTest :app:lintGoogleDebug :app:lintVitalGoogleRelease --no-daemon; } || status=$?; chown -R "$OWNER" "$CHECKOUT"; exit $status'

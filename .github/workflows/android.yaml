@@ -184,9 +184,10 @@ jobs:
           NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY }}
           NARAHEM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.NARAHEM_ANDROID_KEYSTORE_PASSWORD }}
           NARAHEM_BUILD_COMMIT: ${{ env.RELEASE_COMMIT }}
+        # Release lint runs on Linux (Android tests); on this Mac it crashes loading fonts.
         run: |
           NARAHEM_ANDROID_KEYSTORE="$RUNNER_TEMP/narahem-release.p12" NARAHEM_VERSION="$VERSION" \
-            bash gradlew :app:assembleGoogleRelease :app:bundleGoogleRelease --no-daemon
+            bash gradlew :app:assembleGoogleRelease :app:bundleGoogleRelease -x lintVitalGoogleRelease --no-daemon
       - name: Remove the release key from this Mac
         if: always()
         run: rm -f "$RUNNER_TEMP/narahem-release.p12"
