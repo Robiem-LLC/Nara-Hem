@@ -35,9 +35,10 @@ jobs:
           persist-credentials: false
       - name: Synthetic Firebase config (unit tests never contact Firebase)
         run: cp apps/android/ci/google-services.synthetic.json apps/android/app/google-services.json
-      - name: Kotlin style and unit tests (OpenStreetMap flavor, no API keys)
+      - name: Kotlin style, unit tests and lint (both map flavors, no real keys)
         shell: bash
-        # Without a Maps key only the osm flavor is enabled; no secrets are used. The image
+        # Without a Maps key only the osm flavor is enabled, so the google flavor gets a second
+        # run with a synthetic key; no secrets are used. The image
         # runs as root so it can write the checkout; ownership is handed back afterwards so
         # the next checkout can clean it. The Gradle cache persists in a DinD volume.
         run: |
@@ -47,4 +48,4 @@ jobs:
             -v narahem-android-gradle:/gradle -e GRADLE_USER_HOME=/gradle \
             -e OWNER="$(id -u):$(id -g)" -e CHECKOUT="$GITHUB_WORKSPACE" \
             cimg/android:2026.10.1@sha256:4e5677b17e50ea9b478f9b88071cf58dbd751ae4d62f296c676dd47e99a88e4b \
-            bash -c 'status=0; bash gradlew :app:ktlintCheck :app:testOsmDebugUnitTest --no-daemon || status=$?; chown -R "$OWNER" "$CHECKOUT"; exit $status'
+            bash -c 'status=0; { bash gradlew :app:ktlintCheck :app:testOsmDebugUnitTest :app:lintOsmDebug --no-daemon && NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY=synthetic-ci-key-not-for-device-use bash gradlew :app:testGoogleDebugUnitTest :app:lintGoogleDebug --no-daemon; } || status=$?; chown -R "$OWNER" "$CHECKOUT"; exit $status'

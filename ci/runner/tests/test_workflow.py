@@ -69,4 +69,8 @@ class WorkflowTests(unittest.TestCase):
             for s in android["jobs"]["build"]["steps"]
             if s.get("name", "").startswith("Compile Google Maps APK")
         )
-        self.assertIn("inputs.validation", gradle["run"])
+        self.assertNotIn("test", gradle["run"])
+        linux = workflow("android-tests.yaml")["jobs"]["unit-tests"]["steps"]
+        checks = next(s for s in linux if s.get("name", "").startswith("Kotlin style"))
+        for task in ("testOsmDebugUnitTest", "testGoogleDebugUnitTest", "lintGoogleDebug"):
+            self.assertIn(task, checks["run"])

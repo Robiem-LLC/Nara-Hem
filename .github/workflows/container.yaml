@@ -72,9 +72,7 @@ jobs:
         run: python3 -m unittest discover -s apps/webapp/backend/tests -t apps/webapp/backend -v
       - name: CI helpers (relay defaults, GitHub release)
         run: python3 -m unittest discover -s ci/tests -t ci -p 'test_*.py'
-      - name: Validate Cloudflare APNs and FCM Workers
-        run: node --test 'deploy/cloudflare/tests/*.test.mjs'
-      - name: Cloudflare APNs and FCM relay regression tests
+      - name: Cloudflare relay Workers
         run: node --test 'deploy/cloudflare/tests/*.test.mjs'
       - name: Alexa forwarder (Amazon-hosted skill code)
         run: node --test deploy/alexa/forwarder/forwarder.test.cjs

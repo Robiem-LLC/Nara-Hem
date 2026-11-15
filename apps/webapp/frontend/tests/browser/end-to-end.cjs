@@ -18,6 +18,9 @@ const BACKEND = path.resolve(__dirname, '../../../backend');
   const port = socket.address().port;
   await new Promise((resolve) => socket.close(resolve));
   const origin = `http://127.0.0.1:${port}`;
+  // The server's own log and requests, shown only if the test fails.
+  const serverLog = path.join(directory, 'server.log');
+  const logFile = require('node:fs').openSync(serverLog, 'w');
   const server = spawn(
     process.env.NARAHEM_TEST_PYTHON || 'python3',
     [
@@ -29,7 +32,6 @@ const BACKEND = path.resolve(__dirname, '../../../backend');
       '127.0.0.1',
       '--port',
       String(port),
-      '--no-access-log',
       '--no-proxy-headers',
     ],
     {
@@ -44,7 +46,7 @@ const BACKEND = path.resolve(__dirname, '../../../backend');
         NARAHEM_GOOGLE_MAPS_API_KEY:
           process.env.NARAHEM_TEST_MAP_PROVIDER === 'google' ? 'synthetic-browser-key' : '',
       },
-      stdio: ['ignore', 'ignore', 'ignore'],
+      stdio: ['ignore', logFile, logFile],
     },
   );
   let browser;
@@ -1493,6 +1495,10 @@ with Session(db) as session:
       'Three tabs, trusted browser keys, two-device encryption, private member cards, ' +
         'deletion, automatic map and sign-out passed.',
     );
+  } catch (error) {
+    const lines = (await fs.readFile(serverLog, 'utf8')).trim().split('\n');
+    console.error('Server log (last 80 lines):\n' + lines.slice(-80).join('\n'));
+    throw error;
   } finally {
     if (browser) await browser.close();
     server.kill('SIGTERM');

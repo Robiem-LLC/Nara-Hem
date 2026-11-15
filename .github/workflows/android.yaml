@@ -5,10 +5,6 @@ on:
     paths: ['apps/android/**', '.github/workflows/android.yaml']
   workflow_dispatch:
     inputs:
-      validation:
-        description: 'Also run unit tests and lint (slower)'
-        type: boolean
-        default: false
       release:
         description: 'Release version to sign and publish, e.g. 1.0.0 (main only; needs the signed tag v1.0.0 on main). Leave empty for a normal build.'
         type: string
@@ -21,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    # Trusted main/dev commits and manually requested full validations all produce APKs.
+    # Trusted main/dev commits produce APKs. Unit tests and lint run on Linux (Android tests).
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
@@ -76,17 +72,12 @@ jobs:
           printf '%s' "$NARAHEM_GOOGLE_SERVICES_JSON" > apps/android/app/google-services.json
       - name: Stamp UTC build time
         run: echo "NARAHEM_BUILD_UTC=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-      - name: Compile Google Maps APK (optional unit tests and lint)
+      - name: Compile Google Maps APK
         working-directory: apps/android
         env:
           NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY || 'synthetic-ci-key-not-for-device-use' }}
           NARAHEM_BUILD_COMMIT: ${{ github.sha }}
-        run: |
-          tasks=(:app:assembleGoogleDebug)
-          if [[ "${{ inputs.validation }}" == true ]]; then
-            tasks+=(:app:testGoogleDebugUnitTest :app:lintGoogleDebug)
-          fi
-          bash gradlew "${tasks[@]}" --no-daemon
+        run: bash gradlew :app:assembleGoogleDebug --no-daemon
       - name: Print Google APK signing SHA-1
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         run: |
