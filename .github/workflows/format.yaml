@@ -4,13 +4,17 @@ name: Format
 # Markdown and shell scripts.
 # Kotlin is checked by "Android tests" (it needs the Android SDK image); Swift is checked on the
 # Mac by "iOS Mac mini" validation runs.
-# Runs on the self-hosted Linux runner for main, dev, manual runs and pull requests from branches
-# of this repository (never forks).
 on:
   pull_request:
   push:
     branches: [main, dev]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Where to run: your Linux runner, or GitHub's"
+        type: choice
+        options: [local, github]
+        default: local
 
 permissions:
   contents: read
@@ -21,10 +25,11 @@ concurrency:
 
 jobs:
   check:
-    if: >-
-      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    # Pull requests, forks included, are checked on GitHub's runners; other events only here.
+    if: github.event_name == 'pull_request' || github.repository == vars.NARAHEM_TRUSTED_REPOSITORY
+    # Your own signed pushes and runs use your Linux runner; everything else, pull requests from
+    # anyone included, uses GitHub's runners. The runner's guard enforces this; routing only picks.
+    runs-on: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.actor == vars.NARAHEM_TRUSTED_ACTOR && github.triggering_actor == vars.NARAHEM_TRUSTED_ACTOR && inputs.runner != 'github' && github.event.head_commit.committer.email != 'noreply@github.com' && '["self-hosted","Linux","X64","narahem-linux"]' || '"ubuntu-24.04"') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

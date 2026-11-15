@@ -22,6 +22,35 @@ def workflow(name):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_pull_requests_never_name_the_self_hosted_runners(self):
+        # Every job a pull request can start picks its runner with the routing expression: local
+        # only for the trusted account's own signed pushes and runs on main or dev.
+        for path in sorted((ROOT / ".github/workflows").glob("*.yaml")):
+            config = workflow(path.name)
+            events = config.get("on", config.get("true"))
+            if not {"pull_request", "pull_request_target"} & set(events):
+                continue
+            self.assertNotIn("pull_request_target", events, path.name)
+            for name, job in config["jobs"].items():
+                runs_on = job["runs-on"]
+                self.assertIsInstance(runs_on, str, f"{path.name} {name}")
+                for part in (
+                    "github.actor == vars.NARAHEM_TRUSTED_ACTOR",
+                    "github.triggering_actor == vars.NARAHEM_TRUSTED_ACTOR",
+                    "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'",
+                    "github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+                    "noreply@github.com",
+                    "ubuntu-24.04",
+                ):
+                    self.assertIn(part, runs_on, f"{path.name} {name}")
+
+    def test_local_only_jobs_skip_commits_made_on_the_website(self):
+        for name in ["android.yaml", "ios-mac.yaml", "showcase.yaml", "linux-runner-smoke.yaml"]:
+            for job_name, job in workflow(name)["jobs"].items():
+                if job_name == "release":
+                    continue  # manual runs only; the guard checks the commit
+                self.assertIn("noreply@github.com", job["if"], f"{name} {job_name}")
+
     def test_no_self_hosted_pull_request_events(self):
         for name in ["ios-mac.yaml", "android.yaml"]:
             config = workflow(name)

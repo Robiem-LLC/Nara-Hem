@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   smoke:
-    if: github.repository == vars.NARAHEM_TRUSTED_REPOSITORY && github.ref == 'refs/heads/main'
+    if: github.repository == vars.NARAHEM_TRUSTED_REPOSITORY && github.ref == 'refs/heads/main' && github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: [self-hosted, Linux, X64, narahem-linux]
     timeout-minutes: 10
     steps:

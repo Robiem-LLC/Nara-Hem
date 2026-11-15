@@ -1,7 +1,6 @@
 name: Container
 
 # Container CI is intentionally independent of native iOS/Android changes.
-# Avoid burning private-repository Actions minutes on unrelated native-only PRs.
 on:
   pull_request:
     paths:
@@ -19,6 +18,12 @@ on:
       - '.dockerignore'
       - '.github/workflows/container.yaml'
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Where to run: your Linux runner, or GitHub's"
+        type: choice
+        options: [local, github]
+        default: local
 
 permissions:
   contents: read
@@ -29,16 +34,14 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # PR and dev-branch code run only on disposable GitHub-hosted runners.
-  # Validate dev after merging before publishing it; keep unreviewed code
-  # away from the production self-hosted builder.
-  # All validation runs on the dedicated self-hosted Linux runner and its isolated DinD daemon:
-  # main, dev, manual runs, and pull requests from branches of this repository (never forks).
+  # On the Linux runner, Docker and PostgreSQL run on its isolated DinD daemon ("docker");
+  # on GitHub's runners they run locally.
   validate:
-    if: >-
-      github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    # Pull requests, forks included, are checked on GitHub's runners; other events only here.
+    if: github.event_name == 'pull_request' || github.repository == vars.NARAHEM_TRUSTED_REPOSITORY
+    # Your own signed pushes and runs use your Linux runner; everything else, pull requests from
+    # anyone included, uses GitHub's runners. The runner's guard enforces this; routing only picks.
+    runs-on: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.actor == vars.NARAHEM_TRUSTED_ACTOR && github.triggering_actor == vars.NARAHEM_TRUSTED_ACTOR && inputs.runner != 'github' && github.event.head_commit.committer.email != 'noreply@github.com' && '["self-hosted","Linux","X64","narahem-linux"]' || '"ubuntu-24.04"') }}
     timeout-minutes: 40
     services:
       postgres:
@@ -55,9 +58,16 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        if: runner.environment == 'github-hosted'
+        with:
+          node-version: 22
       - name: Install test dependencies
+        # A virtual environment, so GitHub's runners (whose system Python refuses pip) work too.
         run: |
-          python3 -m pip install -r apps/webapp/backend/requirements-dev.txt
+          python3 -m venv "$RUNNER_TEMP/python"
+          echo "$RUNNER_TEMP/python/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/python/bin/pip" install -r apps/webapp/backend/requirements-dev.txt
       - name: Build and verify browser crypto
         # The backend serves the built page (backend/static), so build before the backend tests.
         run: |
@@ -68,7 +78,7 @@ jobs:
         run: python3 -m unittest discover -s apps/webapp/backend/tests -t apps/webapp/backend -v
       - name: Backend tests (PostgreSQL)
         env:
-          NARAHEM_TEST_DATABASE_URL: postgresql+psycopg://narahem_test:synthetic-ci-password@docker:5432/narahem_test
+          NARAHEM_TEST_DATABASE_URL: postgresql+psycopg://narahem_test:synthetic-ci-password@${{ runner.environment == 'github-hosted' && 'localhost' || 'docker' }}:5432/narahem_test
         run: python3 -m unittest discover -s apps/webapp/backend/tests -t apps/webapp/backend -v
       - name: CI helpers (relay defaults, GitHub release)
         run: python3 -m unittest discover -s ci/tests -t ci -p 'test_*.py'
@@ -185,7 +195,9 @@ jobs:
   publish:
     needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    # Your own signed pushes and runs use your Linux runner; everything else, pull requests from
+    # anyone included, uses GitHub's runners. The runner's guard enforces this; routing only picks.
+    runs-on: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.actor == vars.NARAHEM_TRUSTED_ACTOR && github.triggering_actor == vars.NARAHEM_TRUSTED_ACTOR && inputs.runner != 'github' && github.event.head_commit.committer.email != 'noreply@github.com' && '["self-hosted","Linux","X64","narahem-linux"]' || '"ubuntu-24.04"') }}
     timeout-minutes: 40
     permissions:
       contents: read
@@ -232,7 +244,9 @@ jobs:
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY && github.event_name != 'pull_request' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/apple')
-    runs-on: [self-hosted, Linux, X64, narahem-linux]
+    # Your own signed pushes and runs use your Linux runner; everything else, pull requests from
+    # anyone included, uses GitHub's runners. The runner's guard enforces this; routing only picks.
+    runs-on: ${{ fromJSON((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') && github.actor == vars.NARAHEM_TRUSTED_ACTOR && github.triggering_actor == vars.NARAHEM_TRUSTED_ACTOR && inputs.runner != 'github' && github.event.head_commit.committer.email != 'noreply@github.com' && '["self-hosted","Linux","X64","narahem-linux"]' || '"ubuntu-24.04"') }}
     timeout-minutes: 30
     permissions:
       contents: read

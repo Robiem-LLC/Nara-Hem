@@ -31,10 +31,12 @@ concurrency:
 
 jobs:
   phones:
+    # Commits made on GitHub's website aren't signed with the owner's key, so the runner's guard
+    # would refuse them; they're skipped here instead.
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
-      (github.event_name == 'push' || inputs.phones)
+      (github.event_name == 'push' || inputs.phones) && github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: [self-hosted, macOS, ARM64, narahem-ios]
     timeout-minutes: 75
     permissions:
@@ -197,7 +199,7 @@ jobs:
 
   site:
     needs: phones
-    if: always() && github.repository == vars.NARAHEM_TRUSTED_REPOSITORY
+    if: always() && github.repository == vars.NARAHEM_TRUSTED_REPOSITORY && github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: [self-hosted, Linux, X64, narahem-linux]
     timeout-minutes: 30
     permissions:
