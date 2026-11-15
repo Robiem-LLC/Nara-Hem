@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from narahem import texting
-from narahem.app import HASHER, contact, digest
-from narahem.data_service import audit
+from narahem.app import HASHER, contact
+from narahem.data_service import audit, code_hash
 from narahem.models import Account, ContactChange, Settings
 from narahem.schemas import Input
 
@@ -35,14 +35,26 @@ class ContactCodeInput(Input):
     code: str = Field(pattern=r"^[0-9]{6}$")
 
 
-def install(app, *, current, database, rate, deliver, mail_settings, send_text, texting_on, notice):
+def install(
+    app,
+    *,
+    current,
+    database,
+    directory,
+    rate,
+    deliver,
+    mail_settings,
+    send_text,
+    texting_on,
+    notice,
+):
     """Registers this module's routes. The keyword arguments are shared helpers from
     create_app().
     """
 
     def proof(account_id, kind, value, code):
         """Returns the stored form of a code, tied to the account and the new contact."""
-        return digest(f"{account_id}:{kind}:{value}:{code}")
+        return code_hash(directory, f"contact:{account_id}:{kind}:{value}:{code}")
 
     def taken(db, account, kind, value):
         """Returns True if another account already uses this email address or phone number."""

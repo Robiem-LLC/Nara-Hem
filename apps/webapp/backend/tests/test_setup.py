@@ -9,11 +9,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from narahem.app import HASHER, create_app, digest
+from narahem.app import HASHER, create_app, digest, email_address
 from narahem.models import (
     Account,
     AccountApproval,
@@ -1132,6 +1133,24 @@ class SetupTests(unittest.TestCase):
             application = create_app(self.db_url, self.path, PUBLIC, mail_worker=False)
         with TestClient(application, base_url=PUBLIC) as client:
             self.assertEqual(client.get("/").headers["referrer-policy"], "no-referrer")
+
+
+class EmailAddressTests(unittest.TestCase):
+    def test_normal_addresses_pass_and_odd_ones_are_refused(self):
+        self.assertEqual(email_address(" Sam@Example.org "), "sam@example.org")
+        self.assertEqual(email_address("a.b+c@mail.example.co.uk"), "a.b+c@mail.example.co.uk")
+        for bad in ["sam", "sam@example", "sam@.org", "sam@example..org", "a b@example.org"]:
+            with self.assertRaises(HTTPException):
+                email_address(bad)
+        with self.assertRaises(HTTPException):
+            email_address("a" * 250 + "@example.org")
+
+    def test_a_long_hostile_address_is_refused_quickly(self):
+        started = time.monotonic()
+        for value in ["a@" + "b." * 120 + "<", "a@" + "." * 240 + "b"]:
+            with self.assertRaises(HTTPException):
+                email_address(value)
+        self.assertLess(time.monotonic() - started, 0.5)
 
 
 if __name__ == "__main__":

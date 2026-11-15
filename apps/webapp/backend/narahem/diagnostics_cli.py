@@ -6,6 +6,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -86,7 +87,7 @@ def save_export(report, name):
     target = export_dir()
     if target is None:
         raise FileNotFoundError("No writable exports folder is mounted")
-    if Path(name).name != name or not name.startswith("narahem-") or not name.endswith(".txt"):
+    if not re.fullmatch(r"narahem-[A-Za-z0-9_-][A-Za-z0-9._-]{0,120}\.txt", name):
         raise ValueError("Unexpected report name")
     output = target / name
     with output.open("x", encoding="utf-8") as f:
@@ -348,8 +349,10 @@ def main(argv=None):
     if not 1 <= hours <= 336:
         parser.error("Hours must be between 1 and 336")
     if options.output:
-        if Path(options.output).name != options.output or not options.output.endswith(".txt"):
-            parser.error("Output must be a simple .txt filename")
+        if not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9._-]{0,120}\.txt", options.output):
+            parser.error(
+                "Output must be a .txt name of letters, digits, dots, dashes or underscores"
+            )
         name = options.output
     else:
         name = (

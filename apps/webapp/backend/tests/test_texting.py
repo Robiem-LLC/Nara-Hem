@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 import tempfile
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from narahem import texting
 from narahem.app import create_app
-from narahem.models import Account, Base, Settings
+from narahem.models import Account, Base, ContactChange, Settings
 
 PASSWORD = "synthetic long test password"
 PUBLIC = "https://narahem.example.invalid"
@@ -241,6 +242,10 @@ class TextingTests(unittest.TestCase):
         with Session(self.app.state.engine) as db:
             self.assertIsNone(db.scalar(select(Account).where(Account.phone == KIM)))
 
+    def account_ids(self):
+        with Session(self.app.state.engine) as db:
+            return list(db.scalars(select(Account.id)))
+
     def test_changing_email_takes_effect_only_with_the_code(self):
         self.client.post("/api/mail/test", json={})
         wrong = self.client.post(
@@ -254,6 +259,16 @@ class TextingTests(unittest.TestCase):
         self.assertEqual(sent.status_code, 202, sent.text)
         self.assertEqual(self.mail[-1][1], "new@example.invalid")
         code = re.search(r"Enter (\d{6})", self.mail[-1][3]).group(1)
+        # Stored only as a peppered HMAC: a copy of the database can't be tried against all
+        # million codes.
+        with Session(self.app.state.engine) as db:
+            stored = db.scalar(select(ContactChange.code_hash))
+        plain = [
+            hashlib.sha256(f"{a}:email:new@example.invalid:{code}".encode()).hexdigest()
+            for a in self.account_ids()
+        ]
+        self.assertNotIn(stored, plain)
+        self.assertNotIn(code, stored)
         self.assertEqual(self.client.get("/api/session").json()["email"], OWNER)
         bad = self.client.post("/api/account/contact/verify", json={"code": "000000"})
         self.assertEqual(bad.status_code, 400)

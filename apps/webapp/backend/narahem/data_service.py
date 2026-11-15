@@ -70,14 +70,17 @@ def verify_signature(key, body, signature):
         raise HTTPException(403, "Signature rejected") from error
 
 
-def bootstrap_email_hash(directory, device_id, code):
-    """Returns an HMAC of a first-device email code, keyed with a secret pepper so a database
-    leak doesn't allow brute-forcing the code.
+def code_hash(directory, text):
+    """Returns an HMAC of a short code and what it's for, keyed with a secret pepper kept beside
+    the server key, so a database leak doesn't allow brute-forcing six-digit codes.
     """
     pepper = secret_file(directory / "device-email-pepper", lambda: secrets.token_hex(32))
-    return hmac.new(
-        bytes.fromhex(pepper), f"{device_id}:{code}".encode(), hashlib.sha256
-    ).hexdigest()
+    return hmac.new(bytes.fromhex(pepper), text.encode(), hashlib.sha256).hexdigest()
+
+
+def bootstrap_email_hash(directory, device_id, code):
+    """Returns the stored form of a first-device email code."""
+    return code_hash(directory, f"{device_id}:{code}")
 
 
 def diagnostic(db, category, action, account=None, device=None, outcome="ok", **details):

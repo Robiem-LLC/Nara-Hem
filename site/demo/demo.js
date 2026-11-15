@@ -298,7 +298,7 @@
     }
     clearInterval(ticker);
     const snap = S[SCREENS[screen]] || S.map;
-    const body = EXTRA[screen]
+    const body = Object.hasOwn(EXTRA, screen)
       ? EXTRA[screen]()
       : screen === 'trips' && options.member && S.tripsByMember?.[options.member]
         ? today(S.tripsByMember[options.member])

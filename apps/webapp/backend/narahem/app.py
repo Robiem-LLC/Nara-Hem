@@ -90,7 +90,9 @@ def digest(value):
 def email_address(value):
     """Normalizes an email address to lower case and validates it, raising a 422 if invalid."""
     value = value.strip().lower()
-    if not re.fullmatch(r"[^\s<>@\r\n]+@[^\s<>@\r\n]+\.[^\s<>@\r\n]+", value):
+    # One way to match each part (no dots in a domain label), so a long odd input can't make the
+    # check slow.
+    if len(value) > 254 or not re.fullmatch(r"[^\s<>@]+@[^\s<>@.]+(?:\.[^\s<>@.]+)+", value):
         raise HTTPException(422, "Enter a valid email address")
     return value
 
@@ -920,6 +922,7 @@ def create_app(
         app,
         current=current,
         database=database,
+        directory=directory,
         rate=rate,
         deliver=deliver,
         mail_settings=mail_settings,

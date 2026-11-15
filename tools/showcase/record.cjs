@@ -40,12 +40,12 @@ async function open(video) {
   const page = context.pages()[0] || (await context.newPage());
   const tiles = { loaded: 0, failed: 0 };
   page.on('response', (response) => {
-    if (response.url().includes('tile.openstreetmap.org')) {
+    if (new URL(response.url()).hostname === 'tile.openstreetmap.org') {
       tiles[response.ok() ? 'loaded' : 'failed']++;
     }
   });
   page.on('requestfailed', (request) => {
-    if (request.url().includes('tile.openstreetmap.org')) tiles.failed++;
+    if (new URL(request.url()).hostname === 'tile.openstreetmap.org') tiles.failed++;
   });
   return { context, page, tiles };
 }
