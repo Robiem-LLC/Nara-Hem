@@ -27,7 +27,7 @@
  */
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const REVISION = 'alexa-2';
+const REVISION = 'alexa-3';
 const SERVER_CLIENT_ID = 'nara-hem-relay';
 const AMAZON_HOSTS = ['pitangui.amazon.com', 'layla.amazon.com', 'alexa.amazon.co.jp'];
 const MAX_BODY = 16384;
@@ -121,10 +121,25 @@ function serverOrigin(input) {
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
       return null;
     }
+    if (!publicName(url.hostname)) return null;
     return url.pathname === '/' ? url.origin : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Returns true for a public DNS name. IP addresses (however they're written: the URL parser turns
+ * "2130706433" into "127.0.0.1"), single words and names that only work inside a network are
+ * refused, so the relay never calls into a private network on someone's say-so.
+ */
+function publicName(host) {
+  return (
+    host.includes('.') &&
+    !host.startsWith('[') &&
+    !/^[\d.]+$/.test(host) &&
+    !/(^|\.)(localhost|local|internal|intranet|lan|home\.arpa)\.?$/i.test(host)
+  );
 }
 
 /** Escapes text for HTML. */

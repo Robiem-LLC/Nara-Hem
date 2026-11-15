@@ -139,6 +139,36 @@ test('Alexa relay links a household server and passes requests to it', async () 
   assert.ok(code);
 });
 
+test('Alexa relay never calls IP addresses or private network names', async () => {
+  globalThis.fetch = async (input) => {
+    throw new Error('the relay called ' + input);
+  };
+  const addresses = [
+    '127.0.0.1',
+    'https://2130706433/',
+    'https://0x7f.1/',
+    '10.0.0.5:8186',
+    '192.168.1.20',
+    '169.254.169.254',
+    '[::1]',
+    'https://[fd00::1]/',
+    'localhost',
+    'nas.local',
+    'server.internal',
+    'home.lan',
+    'printer.home.arpa',
+    'nas',
+  ];
+  for (const server of addresses) {
+    const reply = await call(
+      '/link',
+      formBody({ client_id: 'nara-hem', redirect_uri: AMAZON, state: 's', server }),
+    );
+    assert.equal(reply.status, 200, server);
+    assert.match(await reply.text(), /Enter your server/, server);
+  }
+});
+
 test('Alexa relay refuses strangers, altered tokens and servers without Alexa', async () => {
   const server = household({ alexa: false });
   const bad = new URLSearchParams({
@@ -175,7 +205,7 @@ test('Alexa relay refuses strangers, altered tokens and servers without Alexa', 
   assert.equal(server.seen.skill.length, 0, 'nothing reaches a server without a sealed token');
   assert.equal((await call('/callback?state=forged&code=x')).status, 400);
   const health = await (await call('/health')).json();
-  assert.equal(health.workerRevision, 'alexa-2');
+  assert.equal(health.workerRevision, 'alexa-3');
 });
 
 test('Alexa relay takes requests from the Amazon-hosted forwarder with its secret', async () => {
