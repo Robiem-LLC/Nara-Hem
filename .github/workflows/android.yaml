@@ -230,3 +230,14 @@ jobs:
           cp "$dist/NaraHem-Android-$VERSION.apk" "$dist/NaraHem-Android.apk"
           (cd "$dist" && shasum -a 256 NaraHem-Android-* > SHA256SUMS && cat SHA256SUMS)
           python3 ci/github_release.py --version "$VERSION" --dir "$dist"
+      - name: Deliver the release APK to Mac share
+        # Beside the everyday builds, in its own android-release folder.
+        if: vars.NARAHEM_LOCAL_PUBLISH_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/android-release-publish-$GITHUB_RUN_ID"
+          rm -rf "$source" && mkdir -p "$source"
+          cp "$RUNNER_TEMP/release-$GITHUB_RUN_ID/NaraHem-Android-$VERSION.apk" "$source/"
+          python3 ci/publish/publish.py --platform android --source "$source" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --commit "$RELEASE_COMMIT" \
+            --channel release --release "$VERSION"

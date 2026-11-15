@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps/ios/ci/remote
 from build import decode_profile, validate_profile
 
 DEFAULT_CONFIG = Path("/Library/Application Support/NaraHemRunner/publish.json")
-CHANNELS = ("main", "dev")
+CHANNELS = ("main", "dev", "release")
 
 
 def digest(path):
@@ -86,13 +86,20 @@ def package(source, platform):
     return chosen
 
 
-def publish(root, source, platform, run_id, attempt, commit, receipt=None, channel="main"):
+def publish(
+    root, source, platform, run_id, attempt, commit, receipt=None, channel="main", release=None
+):
     """Copies a build into an immutable versioned folder and atomically updates the latest
-    pointer. Dev builds use their own folders, android-dev and ios-dev.
+    pointer. Dev builds and signed releases use their own folders, such as android-dev and
+    android-release; a release records its number as "release".
     """
     stage = None
     if channel not in CHANNELS:
         raise ValueError("Unknown build channel")
+    if (channel == "release") != bool(release) or (
+        release and not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?", release)
+    ):
+        raise ValueError("A release needs its version number, and only a release has one")
     folder = platform if channel == "main" else f"{platform}-{channel}"
     artifact = package(source, platform)  # Validate before touching the share.
     if receipt is not None:
@@ -134,6 +141,8 @@ def publish(root, source, platform, run_id, attempt, commit, receipt=None, chann
             manifest["channel"] = (
                 channel  # main manifests stay byte-identical for idempotent retries.
             )
+        if release:
+            manifest["release"] = release
         if destination.exists():
             previous = json.loads((destination / "manifest.json").read_text())
             if previous != manifest or digest(destination / filename) != checksum:
@@ -257,6 +266,7 @@ def main():
     p.add_argument("--commit")
     p.add_argument("--receipt", type=Path)
     p.add_argument("--channel", choices=CHANNELS, default="main")
+    p.add_argument("--release", help="Release version, e.g. 1.0.0 (release channel only)")
     args = p.parse_args()
     target = configured_root(args.config)
     if args.check:
@@ -275,6 +285,7 @@ def main():
         args.commit,
         args.receipt,
         args.channel,
+        args.release,
     )
 
 

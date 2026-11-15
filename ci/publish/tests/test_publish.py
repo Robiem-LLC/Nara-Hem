@@ -57,6 +57,39 @@ class PublishingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             publish(self.share, self.source, "android", 21, 1, "b" * 40, channel="feature")
 
+    def test_releases_publish_separately_with_their_version(self):
+        self.send(10)
+        self.make_apk(b"signed release")
+        with contextlib.redirect_stdout(io.StringIO()):
+            publish(
+                self.share,
+                self.source,
+                "android",
+                30,
+                1,
+                "c" * 40,
+                channel="release",
+                release="1.0.0",
+            )
+        self.assertEqual(json.loads((self.share / "android/latest.json").read_text())["run_id"], 10)
+        latest = json.loads((self.share / "android-release/latest.json").read_text())
+        self.assertEqual((latest["channel"], latest["release"]), ("release", "1.0.0"))
+        self.assertEqual(
+            (self.share / "android-release/NaraHem.apk").read_bytes(), self.apk.read_bytes()
+        )
+        for channel, number in [("release", None), ("release", "v1"), ("main", "1.0.0")]:
+            with self.assertRaises(ValueError):
+                publish(
+                    self.share,
+                    self.source,
+                    "android",
+                    31,
+                    1,
+                    "c" * 40,
+                    channel=channel,
+                    release=number,
+                )
+
     def test_latest_package_and_two_historical_versions(self):
         import hashlib
 
