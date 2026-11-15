@@ -41,7 +41,7 @@ class TextbeltClientTests(unittest.TestCase):
             self.assertRaises(texting.TextingError) as error,
         ):
             self.client.send("k", "+14155550123", "https://x.example.invalid")
-        self.assertIn("allow links from your server", str(error.exception))
+        self.assertIn("listing your server's address", str(error.exception))
         with (
             patch.object(httpx, "get", return_value=answer({"success": False})),
             self.assertRaises(texting.TextingError) as error,

@@ -71,8 +71,16 @@ one. Check the spam folder too.
 
 ## Texts with links are refused
 
-Textbelt only sends links once they're allowed for your key. The error says so; ask Textbelt
-support to allow links from your server's address.
+Textbelt only sends links once your key is approved for them. Request it at
+[textbelt.com/whitelist](https://textbelt.com/whitelist): describe the use (invitations and sign-in
+links for your household's own server) and list the domains your texts link to:
+
+- your server's address, e.g. `family.example.com`;
+- `testflight.apple.com` and `github.com`, the app downloads in invitations;
+- once the apps are in the stores, `apps.apple.com` and `play.google.com`.
+
+Shortened links (bit.ly, TinyURL) are never allowed. Once approved, **Admin settings → Text
+messages → Send test text** confirms links get through.
 
 ## No notifications on phones
 

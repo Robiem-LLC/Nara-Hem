@@ -51,8 +51,8 @@ def describe(error):
     text = str(error or "").strip() or "Textbelt did not say why"
     if re.search(r"url|link", text, re.IGNORECASE):
         return (
-            text + " Textbelt only sends links once they are allowed for your key: ask Textbelt "
-            "support to allow links from your server's address."
+            text + " Textbelt only sends links once your key is approved for them: request it at "
+            "textbelt.com/whitelist, listing your server's address and the app download sites."
         )
     return text
 

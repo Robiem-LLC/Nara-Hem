@@ -228,7 +228,7 @@ class TextingTests(unittest.TestCase):
         self.texts.refuse = "Sorry, URLs are not allowed for this key."
         refused = self.client.post("/api/texting/test", json={"phone": KIM})
         self.assertEqual(refused.status_code, 502)
-        self.assertIn("allow links", refused.json()["detail"])
+        self.assertIn("textbelt.com/whitelist", refused.json()["detail"])
 
     def test_phone_numbers_are_stored_in_one_form(self):
         for given in ("4155550123", "14155550123", "+1 (415) 555-0123", "415.555.0123"):
