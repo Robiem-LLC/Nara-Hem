@@ -393,6 +393,56 @@ class RelayTests(unittest.TestCase):
             self.call(viewer, "GET", "/api/trips/" + event["body"]["id"]).status_code, 404
         )
 
+    def test_sharing_again_shows_past_trips_back_to_the_join_day(self):
+        # Intended: sharing is about who may look now. Someone added back sees the member's
+        # earlier trips again, but never from before the day their own account joined.
+        from narahem.models import AccountApproval
+
+        owner = self.bootstrap()
+        subject_id, subject_client = self.second_member("subject@example.invalid", "subject")
+        viewer_id, viewer_client = self.second_member("viewer@example.invalid", "viewer")
+        with Session(self.app.state.engine) as db:
+            approval = db.get(AccountApproval, viewer_id)
+            if approval is None:
+                approval = AccountApproval(account_id=viewer_id, approved_by=self.owner_id)
+                db.add(approval)
+            approval.created = time.time() - 3 * 86400
+            db.commit()
+        subject = self.register(subject_client, subject_id)
+        viewer = self.register(viewer_client, viewer_id)
+        self.assertEqual(
+            self.call(
+                owner, "POST", "/api/roster", self.roster(owner, [owner, subject, viewer])
+            ).status_code,
+            200,
+        )
+        captured = int(time.time() * 1000) - 2 * 86_400_000
+        trip = {
+            "type": "trip_summary",
+            "account_id": subject_id,
+            "started_at": captured - 600000,
+            "ended_at": captured,
+            "distance_m": 5000,
+            "max_speed_mps": 20,
+            "samples": 30,
+            "preview": [[40.0, -74.0], [40.01, -74.0]],
+        }
+        event = self.server_sealed(
+            subject, self.record(subject, kind="event", data=trip, captured=captured), trip
+        )
+        self.assertEqual(self.call(subject, "POST", "/api/records", event).status_code, 201)
+        url = "/api/trips/" + event["body"]["id"]
+
+        def share_with(ids):
+            reply = self.call(subject, "PUT", "/api/sharing/audience", {"account_ids": ids})
+            self.assertEqual(reply.status_code, 200)
+
+        self.assertEqual(self.call(viewer, "GET", url).status_code, 200)
+        share_with([])
+        self.assertEqual(self.call(viewer, "GET", url).status_code, 404)
+        share_with([viewer_id])
+        self.assertEqual(self.call(viewer, "GET", url).status_code, 200)
+
     def test_server_decides_household_alerts_and_serves_their_text(self):
         from narahem.models import PushDelivery
 
@@ -1128,6 +1178,8 @@ class RelayTests(unittest.TestCase):
         )
         self.assertEqual(self.call(b, "GET", "/api/records").status_code, 403)
         self.assertEqual(self.call(b, "POST", "/api/records", self.record(b)).status_code, 403)
+        batch = {"records": [self.record(b)]}
+        self.assertEqual(self.call(b, "POST", "/api/records/batch", batch).status_code, 403)
 
     def test_two_device_roundtrip_database_has_no_plaintext_payload(self):
         a, b = self.pair()
@@ -2300,6 +2352,26 @@ class RelayTests(unittest.TestCase):
         )
         self.assertEqual(client.get("/api/storage").status_code, 403)
         self.assertEqual(client.get("/api/push/config").status_code, 403)
+
+    def test_member_cannot_revoke_another_members_phone(self):
+        a = self.bootstrap()
+        helper, helper_client = self.member()
+        b = self.register(helper_client, helper)
+        other_id, other_client = self.second_member("other@example.invalid", "other")
+        c = self.register(other_client, other_id)
+        self.assertEqual(
+            self.call(a, "POST", "/api/roster", self.roster(a, [a, b, c])).status_code, 200
+        )
+        # Dropping another member's phone from the signed list is refused, and it stays approved.
+        self.assertEqual(
+            self.call(b, "POST", "/api/roster", self.roster(b, [a, b])).status_code, 403
+        )
+        self.assertEqual(self.call(c, "GET", "/api/records").status_code, 200)
+        # The admin may.
+        self.assertEqual(
+            self.call(a, "POST", "/api/roster", self.roster(a, [a, b])).status_code, 200
+        )
+        self.assertEqual(self.call(c, "GET", "/api/records").status_code, 401)
 
     def test_account_revocation_blocks_reads_and_requires_signed_reconciliation(self):
         a = self.bootstrap()

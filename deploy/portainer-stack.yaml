@@ -18,7 +18,8 @@ services:
       - ${NARAHEM_DIR:-/opt/docker/narahem}/server-data:/data #optional base folder: keys, keep private
       - ${NARAHEM_DIR:-/opt/docker/narahem}/exports:/exports # readable redacted reports, safe to share
     ports:
-      - '${NARAHEM_PORT:-8186}:8080' #optional: plain HTTP, only for your proxy/tunnel
+      # Plain HTTP for your proxy or tunnel; only this server can reach it unless NARAHEM_BIND_ADDRESS says otherwise.
+      - '${NARAHEM_BIND_ADDRESS:-127.0.0.1}:${NARAHEM_PORT:-8186}:8080'
     depends_on:
       database:
         condition: service_healthy

@@ -70,22 +70,21 @@ HTTPS in front of it (next section).
 
 ### Optional
 
-| Variable                                         | Default                    | What it does                                                                               |
-| ------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------ |
-| `NARAHEM_TAG`                                    | `latest`                   | Image channel: `latest` (releases) or `dev` (test builds).                                 |
-| `NARAHEM_DIR`                                    | `/opt/docker/narahem`      | Folder for the data (Portainer stack).                                                     |
-| `NARAHEM_PORT`                                   | `8186`                     | Port the server listens on.                                                                |
-| `NARAHEM_GOOGLE_MAPS_API_KEY`                    | none: OpenStreetMap        | Google Maps browser key ([Google Maps](../docs/google-maps.md)).                           |
-| `NARAHEM_TEXTBELT_KEY`                           | none                       | Textbelt key for text messages. You can also add it in **Admin settings**; this one wins.  |
-| `NARAHEM_ALLOW_ALEXA`                            | `false`                    | `true` lets you link the Alexa skill ([Alexa](../docs/alexa.md)).                          |
-| `NARAHEM_ALERT_ADDRESSES`                        | on                         | `0` stops street-address lookups for alerts and trips ("left an unsaved place").           |
-| `NARAHEM_STORAGE_QUOTA_MIB`                      | `512`                      | Most space encrypted records may use, in MiB.                                              |
-| `NARAHEM_SETUP_TOKEN`                            | generated                  | Your own first-run setup token (8–256 characters). Only used until setup is done.          |
-| `NARAHEM_IOS_APP_URL`, `NARAHEM_ANDROID_APP_URL` | built into official images | If you build your own apps, point the invitation links to them; `none` leaves one out.     |
-| `NARAHEM_SOURCE_URL`                             | built into official images | The **Source code** link in Admin settings → About. Running a changed version? Link yours. |
-| `NARAHEM_ALLOW_HTTP`                             | `0`                        | `1` allows plain HTTP for testing on your own network only. Never for normal use.          |
-
-Docker Compose also reads `NARAHEM_BIND_ADDRESS` (where the port listens).
+| Variable                                         | Default                    | What it does                                                                                             |
+| ------------------------------------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `NARAHEM_TAG`                                    | `latest`                   | Image channel: `latest` (releases) or `dev` (test builds).                                               |
+| `NARAHEM_DIR`                                    | `/opt/docker/narahem`      | Folder for the data (Portainer stack).                                                                   |
+| `NARAHEM_PORT`                                   | `8186`                     | Port the server listens on.                                                                              |
+| `NARAHEM_BIND_ADDRESS`                           | `127.0.0.1`                | Where the port listens. If your tunnel or proxy reaches it by IP, set this server's LAN IP or `0.0.0.0`. |
+| `NARAHEM_GOOGLE_MAPS_API_KEY`                    | none: OpenStreetMap        | Google Maps browser key ([Google Maps](../docs/google-maps.md)).                                         |
+| `NARAHEM_TEXTBELT_KEY`                           | none                       | Textbelt key for text messages. You can also add it in **Admin settings**; this one wins.                |
+| `NARAHEM_ALLOW_ALEXA`                            | `false`                    | `true` lets you link the Alexa skill ([Alexa](../docs/alexa.md)).                                        |
+| `NARAHEM_ALERT_ADDRESSES`                        | on                         | `0` stops street-address lookups for alerts and trips ("left an unsaved place").                         |
+| `NARAHEM_STORAGE_QUOTA_MIB`                      | `512`                      | Most space encrypted records may use, in MiB.                                                            |
+| `NARAHEM_SETUP_TOKEN`                            | generated                  | Your own first-run setup token (8–256 characters). Only used until setup is done.                        |
+| `NARAHEM_IOS_APP_URL`, `NARAHEM_ANDROID_APP_URL` | built into official images | If you build your own apps, point the invitation links to them; `none` leaves one out.                   |
+| `NARAHEM_SOURCE_URL`                             | built into official images | The **Source code** link in Admin settings → About. Running a changed version? Link yours.               |
+| `NARAHEM_ALLOW_HTTP`                             | `0`                        | `1` allows plain HTTP for testing on your own network only. Never for normal use.                        |
 
 ## Reaching your server
 
@@ -102,6 +101,8 @@ Whichever you choose:
   other.
 - Keep the original `Host` header when forwarding.
 - Don't forward port `8186` itself to the internet.
+- If the tunnel or proxy reaches the server by its IP address (rather than running on the server
+  itself), set `NARAHEM_BIND_ADDRESS` (see [optional variables](#optional)).
 
 ## Updates
 
