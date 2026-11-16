@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS client
+FROM node:25-bookworm-slim AS client
 WORKDIR /client
 COPY apps/webapp/frontend/package.json apps/webapp/frontend/package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -9,7 +9,7 @@ RUN CLIENT_OUT=/out npm run build
 
 # OSRM and Python live in the SAME hardened Nära Hem container.
 # The -debian variant supplies apt and a compatible system Python.
-FROM ghcr.io/project-osrm/osrm-backend:26.10.0-debian
+FROM ghcr.io/project-osrm/osrm-backend:26.11.0-debian
 LABEL org.opencontainers.image.description="Nära Hem server with private road matching"
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
