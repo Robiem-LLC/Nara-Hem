@@ -821,8 +821,11 @@ def create_app(
         return True
 
     def flush_mail(db):
-        """Sends queued emails and texts, backing off after failures."""
-        config, sent, waiting = None, 0, False
+        """Sends queued emails and texts, backing off after failures. Also returns, per outbox
+        key, why each channel failed this time: Textbelt's reason for a text, and for email only
+        that it will be retried, so mail server details stay out of replies.
+        """
+        config, sent, waiting, failed = None, 0, False, {}
         for item in db.scalars(
             select(Outbox)
             .where(Outbox.status == "pending", Outbox.retry_at <= time.time())
@@ -841,14 +844,22 @@ def create_app(
                 else:
                     config = config or mail_settings(db)
                     deliver(config, payload["recipient"], payload["subject"], payload["body"])
-            except (OSError, smtplib.SMTPException, texting.TextingError, HTTPException):
+            except (OSError, smtplib.SMTPException, texting.TextingError, HTTPException) as error:
                 item.retry_at = time.time() + min(300, 2 ** min(item.attempts, 8))
                 waiting = True
+                channel = "text" if payload.get("channel") == "text" else "email"
+                if isinstance(error, texting.TextingError):
+                    reason = str(error)
+                elif isinstance(error, HTTPException):
+                    reason = str(error.detail)
+                else:
+                    reason = "The mail server didn't accept it."
+                failed.setdefault(item.account_id, {})[channel] = reason
                 continue
             item.status, item.payload = "sent", ""
             sent += 1
         db.commit()
-        return {"sent": sent, "delivery": "pending" if waiting else "sent"}
+        return {"sent": sent, "delivery": "pending" if waiting else "sent", "failed": failed}
 
     def worker_batch():
         """Background job: cleans up phone enrollment, rechecks the texting key now and then,

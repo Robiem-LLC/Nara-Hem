@@ -177,6 +177,24 @@ class TextingTests(unittest.TestCase):
         listed = {a["email"]: a for a in self.client.get("/api/accounts").json()}
         self.assertEqual(listed["kim@example.invalid"]["phone"], KIM)
 
+    def test_the_invite_screen_hears_why_a_text_was_refused(self):
+        self.turn_on()
+        self.texts.refuse = "Sorry, URLs are not allowed for this key."
+        invited = self.client.post(
+            "/api/invitations", json={"email": "kim@example.invalid", "phone": "+1 415 555 0123"}
+        ).json()
+        self.assertEqual(invited["channels"], ["email", "text"])
+        self.assertEqual(self.mail[-1][1], "kim@example.invalid", "the email still went")
+        self.assertEqual(list(invited["problems"]), ["text"])
+        self.assertIn("textbelt.com/whitelist", invited["problems"]["text"])
+        self.assertEqual(invited["delivery"], "pending")
+        # Once Textbelt takes it, a retry sends it and the reply has no problems.
+        self.texts.refuse = None
+        self.assertEqual(self.client.post("/api/mail/retry", json={}).json()["sent"], 1)
+        self.assertEqual(self.texts.sent[-1][0], KIM)
+        fine = self.client.post("/api/invitations", json={"email": "ash@example.invalid"}).json()
+        self.assertEqual((fine["problems"], fine["delivery"]), ({}, "sent"))
+
     @patch.dict(os.environ, APP_LINKS)
     def test_invitations_say_where_to_get_the_app_and_how_to_sign_in(self):
         self.turn_on()

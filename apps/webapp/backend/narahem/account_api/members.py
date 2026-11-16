@@ -114,11 +114,12 @@ def install(
         db.flush()
         sent_to = queue(db, account)
         db.commit()
-        return {
-            "invited": True,
-            "channels": sent_to,
-            **(flush_mail(db) if sent_to else {"delivery": "not_requested"}),
-        }
+        if not sent_to:
+            return {"invited": True, "channels": sent_to, "delivery": "not_requested"}
+        result = flush_mail(db)
+        # Only this invitation's problems, e.g. Textbelt refusing the text, for the invite screen.
+        problems = result.pop("failed", {}).get(account.id, {})
+        return {"invited": True, "channels": sent_to, **result, "problems": problems}
 
     @app.post("/api/invitation-requests", status_code=202)
     def request_invitation(

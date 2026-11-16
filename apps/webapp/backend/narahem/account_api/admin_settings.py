@@ -321,4 +321,6 @@ def install(
         rate(request, "mail", 10)
         db.query(Outbox).filter_by(status="pending").update({Outbox.retry_at: 0})
         db.commit()
-        return flush_mail(db)
+        result = flush_mail(db)
+        result.pop("failed", None)
+        return result

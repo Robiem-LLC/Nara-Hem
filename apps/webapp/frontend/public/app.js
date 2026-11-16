@@ -1080,11 +1080,25 @@ function inviteByPhone() {
   });
 }
 
-/** Describes where an invitation went. */
+/** Describes where an invitation went, and why any text or email couldn't be sent. */
 function invitationNotice(result) {
   const sent = { email: 'emailed', text: 'texted' };
-  const how = (result.channels ?? []).map((channel) => sent[channel]).join(' and ');
-  if (!how) return 'Invitation created. Set up email or text messages to send it.';
+  const named = { email: 'email', text: 'text message' };
+  const channels = result.channels ?? [];
+  if (!channels.length) return 'Invitation created. Set up email or text messages to send it.';
+  const problems = result.problems ?? {};
+  const worked = channels.filter((channel) => !problems[channel]);
+  const failed = channels
+    .filter((channel) => problems[channel])
+    .map((channel) => {
+      const why = String(problems[channel]).trim();
+      const ended = /[.!?]$/.test(why) ? why : why + '.';
+      return `The ${named[channel]} wasn't sent: ${ended} Nära Hem keeps trying for 30 minutes.`;
+    });
+  const how = worked.map((channel) => sent[channel]).join(' and ');
+  if (failed.length) {
+    return [how ? `Invitation ${how}.` : 'Invitation created.', ...failed].join(' ');
+  }
   if (result.delivery === 'pending') {
     return `Invitation ${how}, but sending is still being retried.`;
   }

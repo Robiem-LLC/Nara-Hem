@@ -1021,6 +1021,9 @@ class SetupTests(unittest.TestCase):
             client.cookies.update(self.client.cookies)
             response = client.post("/api/invitations", json={"email": "member@example.invalid"})
             self.assertEqual(response.json()["delivery"], "pending")
+            self.assertEqual(
+                response.json()["problems"], {"email": "The mail server didn't accept it."}
+            )
             self.assertNotIn("smtp-test-secret", response.text)
         self.assertEqual(self.client.post("/api/mail/retry", json={}).json()["sent"], 1)
         with Session(self.app.state.engine) as db:
