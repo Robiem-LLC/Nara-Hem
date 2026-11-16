@@ -342,6 +342,15 @@
 
   /** Puts the site's GitHub and Install buttons where Sign out is, and adds the extra tabs. */
   function siteHeader() {
+    // The site says what Nära Hem is; the app's own tagline stays in the app.
+    app
+      .querySelector('header .eyebrow')
+      ?.replaceWith(
+        element(
+          '<div class="site-tagline"><p>A self-hosted family location tracking ecosystem.</p>' +
+            '<p>Take back your data.</p></div>',
+        ),
+      );
     app
       .querySelector('#logout')
       ?.replaceWith(

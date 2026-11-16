@@ -156,3 +156,21 @@ main {
 .site-phone .phone-android video {
   border-radius: 20px;
 }
+
+/* The site's tagline under the wordmark, in place of the app's. */
+.site-tagline p {
+  margin: 0;
+}
+.site-tagline p:first-child {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.site-tagline p + p {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
