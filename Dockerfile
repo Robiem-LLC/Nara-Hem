@@ -1,4 +1,4 @@
-FROM node:25-bookworm-slim AS client
+FROM node:24-bookworm-slim AS client
 WORKDIR /client
 COPY apps/webapp/frontend/package.json apps/webapp/frontend/package-lock.json ./
 RUN npm ci --ignore-scripts

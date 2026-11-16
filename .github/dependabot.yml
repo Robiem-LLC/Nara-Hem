@@ -1,7 +1,9 @@
 # Monthly dependency updates, one grouped pull request per ecosystem and folder. A new release
 # must be a week old before it's proposed, so a bad or hijacked release has time to be caught.
 # Not watched: the PostgreSQL image in the stack files (a major version needs a planned upgrade)
-# and the Alexa forwarder (it runs inside Amazon and is updated by hand).
+# and the Alexa forwarder (it runs inside Amazon and is updated by hand). Major Android library and
+# build-tool versions, and Node.js majors (only long-term-support ones are used), are upgraded by
+# hand as planned work.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -40,6 +42,9 @@ updates:
       interval: monthly
     cooldown:
       default-days: 7
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
     groups:
       android:
         patterns: ['*']
@@ -50,6 +55,9 @@ updates:
       interval: monthly
     cooldown:
       default-days: 7
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
     groups:
       docker:
         patterns: ['*']
