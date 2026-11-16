@@ -113,7 +113,6 @@ async function tour() {
         header: document.querySelector('main > header').outerHTML,
         nav: document.querySelector('#app-nav').outerHTML,
         view: document.querySelector('#view').innerHTML,
-        footer: document.querySelector('main > footer').outerHTML,
         markers: [...document.querySelectorAll('.person-marker .map-person')].map(
           (m) => m.outerHTML,
         ),
