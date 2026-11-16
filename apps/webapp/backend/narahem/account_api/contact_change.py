@@ -114,7 +114,7 @@ def install(
                 )
         except (OSError, smtplib.SMTPException, texting.TextingError) as error:
             db.commit()
-            raise HTTPException(502, "Could not send the code; check it and try again") from error
+            raise HTTPException(424, "Could not send the code; check it and try again") from error
         row = db.get(ContactChange, account.id) or ContactChange(account_id=account.id)
         row.kind, row.value = kind, value
         row.code_hash = proof(account.id, kind, value, code)

@@ -246,7 +246,7 @@ class TextingTests(unittest.TestCase):
         self.assertEqual(sent.json()["quota"], 39)
         self.texts.refuse = "Sorry, URLs are not allowed for this key."
         refused = self.client.post("/api/texting/test", json={"phone": KIM})
-        self.assertEqual(refused.status_code, 502)
+        self.assertEqual(refused.status_code, 424)
         self.assertIn("textbelt.com/whitelist", refused.json()["detail"])
 
     def test_phone_numbers_are_stored_in_one_form(self):

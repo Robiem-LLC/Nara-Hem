@@ -1049,7 +1049,7 @@ class SetupTests(unittest.TestCase):
                     client.headers.update(dict(self.client.headers))
                     client.cookies.update(self.client.cookies)
                     response = client.post("/api/mail/test", json={})
-                    self.assertEqual(response.status_code, 502)
+                    self.assertEqual(response.status_code, 424)
                     self.assertIn(text, response.json()["detail"])
 
     def test_plaintext_location_endpoints_are_not_exposed(self):

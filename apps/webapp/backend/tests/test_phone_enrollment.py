@@ -152,7 +152,7 @@ class PhoneEnrollmentTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/mail/test", json={}).status_code, 200)
         self.messages = FailingMail()
         reply = client.post("/api/phones/code", json={"device_id": device})
-        self.assertEqual(reply.status_code, 502)
+        self.assertEqual(reply.status_code, 424)
 
     def test_review_accounts_get_the_fixed_code_and_nothing_is_sent(self):
         owner = self.bootstrap()

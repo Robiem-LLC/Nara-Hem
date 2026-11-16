@@ -155,7 +155,14 @@ async function api(path, method = 'GET', body, extraHeaders = {}) {
     credentials: 'same-origin',
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = await response.json();
+  // A tunnel or proxy can answer with its own web page instead of the server's JSON.
+  const data = await response.json().catch(() => null);
+  if (data === null) {
+    throw new Error(
+      `Your server's address answered with a web page (HTTP ${response.status}) instead of ` +
+        'Nära Hem. Try again; if it keeps happening, check your tunnel or proxy.',
+    );
+  }
   if (!response.ok) {
     const error = new Error(
       typeof data.detail === 'string' ? data.detail : 'Please check the fields and try again.',

@@ -700,7 +700,7 @@ def create_app(
 
     def send_now(db, account, subject, email_body, text_body):
         """Sends the message straight away by email and by text, wherever the account can be
-        reached. Returns the channels that worked; raises a 409 or 502 if none did.
+        reached. Returns the channels that worked; raises a 409 or 424 if none did.
         """
         # Codes only go through email the administrator has tested.
         tested = db.get(Settings, 1).mail_tested
@@ -722,7 +722,7 @@ def create_app(
             except (OSError, smtplib.SMTPException, texting.TextingError):
                 continue
         if not sent:
-            raise HTTPException(502, "Could not send the code; try again shortly")
+            raise HTTPException(424, "Could not send the code; try again shortly")
         return sent
 
     def send_text(db, phone, body):

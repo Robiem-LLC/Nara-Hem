@@ -168,17 +168,17 @@ def install(
             )
         except smtplib.SMTPAuthenticationError as error:
             raise HTTPException(
-                502, "The mail server rejected the username or password."
+                424, "The mail server rejected the username or password."
             ) from error
         except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected) as error:
-            raise HTTPException(502, MAIL_UNREACHABLE) from error
+            raise HTTPException(424, MAIL_UNREACHABLE) from error
         except smtplib.SMTPException as error:
             # SMTP errors are also OSErrors, so they are handled before network errors.
             raise HTTPException(
-                502, "The mail server refused the test email; check the email address."
+                424, "The mail server refused the test email; check the email address."
             ) from error
         except OSError as error:
-            raise HTTPException(502, MAIL_UNREACHABLE) from error
+            raise HTTPException(424, MAIL_UNREACHABLE) from error
         db.get(Settings, 1).mail_tested = True
         db.commit()
         return {"sent": True}
@@ -252,7 +252,9 @@ def install(
             )
         except texting.TextingError as error:
             db.commit()
-            raise HTTPException(502, str(error)) from error
+            # 424, not 502: tunnels and proxies such as Cloudflare replace a 502 with their own
+            # error page, and the reason would never reach the screen.
+            raise HTTPException(424, str(error)) from error
         db.commit()
         return {"sent": True, **texting_status(db)}
 
@@ -297,7 +299,7 @@ def install(
                 "If you did not request it, change your account password.",
             )
         except (OSError, smtplib.SMTPException) as error:
-            raise HTTPException(502, "Could not send device verification email") from error
+            raise HTTPException(424, "Could not send device verification email") from error
         challenge = db.get(DeviceBootstrapChallenge, dev.id)
         if challenge:
             challenge.code_hash = bootstrap_email_hash(directory, dev.id, code)
