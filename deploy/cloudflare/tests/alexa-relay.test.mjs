@@ -139,6 +139,60 @@ test('Alexa relay links a household server and passes requests to it', async () 
   assert.ok(code);
 });
 
+test('Alexa relay wakes the skill for a household server, and only with sane values', async () => {
+  const secrets = { ...env, SKILL_CLIENT_ID: 'skill-client', SKILL_CLIENT_SECRET: 'skill-secret' };
+  const notify = (body, keys = secrets) =>
+    relay.fetch(
+      new Request(RELAY + '/v1/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      keys,
+    );
+  const ask = {
+    user: 'amzn1.ask.account.SYNTHETIC',
+    endpoint: 'https://api.amazonalexa.com',
+    watch: 'a'.repeat(32),
+  };
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url === 'https://api.amazon.com/auth/o2/token') {
+      const form = new URLSearchParams(init.body);
+      assert.equal(form.get('grant_type'), 'client_credentials');
+      assert.equal(form.get('scope'), 'alexa:skill_messaging');
+      assert.equal(form.get('client_secret'), 'skill-secret');
+      return Response.json({ access_token: 'messaging-token', expires_in: 3600 });
+    }
+    assert.equal(
+      url,
+      'https://api.amazonalexa.com/v1/skillmessages/users/amzn1.ask.account.SYNTHETIC',
+    );
+    assert.equal(init.headers.Authorization, 'Bearer messaging-token');
+    assert.deepEqual(JSON.parse(init.body), {
+      data: { watch: 'a'.repeat(32) },
+      expiresAfterSeconds: 600,
+    });
+    return new Response(null, { status: 202 });
+  };
+  assert.equal((await notify(ask)).status, 202);
+  assert.equal((await notify(ask)).status, 202);
+  assert.equal(calls.filter((c) => c.url.includes('/auth/o2/token')).length, 1, 'token reused');
+  // Nothing else reaches Amazon: another host, a made-up user or watch, or no credentials.
+  const before = calls.length;
+  for (const bad of [
+    { ...ask, endpoint: 'https://evil.example' },
+    { ...ask, user: 'someone' },
+    { ...ask, watch: '../../x' },
+  ]) {
+    assert.equal((await notify(bad)).status, 400);
+  }
+  assert.equal((await notify(ask, env)).status, 503);
+  assert.equal(calls.length, before);
+});
+
 test('Alexa relay never calls IP addresses or private network names', async () => {
   globalThis.fetch = async (input) => {
     throw new Error('the relay called ' + input);
@@ -205,7 +259,7 @@ test('Alexa relay refuses strangers, altered tokens and servers without Alexa', 
   assert.equal(server.seen.skill.length, 0, 'nothing reaches a server without a sealed token');
   assert.equal((await call('/callback?state=forged&code=x')).status, 400);
   const health = await (await call('/health')).json();
-  assert.equal(health.workerRevision, 'alexa-3');
+  assert.equal(health.workerRevision, 'alexa-4');
 });
 
 test('Alexa relay takes requests from the Amazon-hosted forwarder with its secret', async () => {

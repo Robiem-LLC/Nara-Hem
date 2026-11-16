@@ -18,6 +18,7 @@ What this means:
   - For somewhere that is not a saved place, the server sends that one coordinate to Google's Geocoding API (if the server's Maps key allows it) or to OpenStreetMap Nominatim, to get a street address for the alert or for a trip's start or end (once per trip). Set `NARAHEM_ALERT_ADDRESSES=0` to turn this off.
   - Apple and Google push services carry only a few fixed messages ("A household update is available", "Household alert", the Find My Phone ring) and see when each phone is woken. They never get names, places, alert text or locations: the phone fetches those from your server over HTTPS.
   - Map tile providers see the regions viewed in the apps and the web app.
+  - If you link Alexa, Amazon hears what you ask and what Alexa answers ("Maya is at school"), and the text of any "let me know when" reminder ("Maya has arrived home"). It never gets coordinates.
 - **The server enforces who sees what.** It only shows a member's location, trips and alerts to the accounts that member's phone shares with, and only trips from the day each account joined.
 
 ## What protects your data

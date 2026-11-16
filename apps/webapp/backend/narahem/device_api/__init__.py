@@ -71,6 +71,8 @@ def install(
     """Registers the device API routes and creates the helpers they share."""
     quota = int(os.environ.get("NARAHEM_STORAGE_QUOTA_MIB", "512")) * 1024 * 1024
     place_cache = {}
+    # Filled when Alexa is allowed: "fix" sees each location, "send" runs with the deliveries.
+    alexa_hooks = {}
 
     if quota < 1024 * 1024:
         raise ValueError("Storage quota must be at least 1 MiB")
@@ -317,6 +319,8 @@ def install(
         )
         keep_memory(db, row, device.id, memory)
         raise_alerts(db, device, captured_at, alerts, now)
+        if "fix" in alexa_hooks:
+            alexa_hooks["fix"](db, device, float(lat), float(lon), float(accuracy))
 
     def note_trip_end(db, device, summary, now):
         """Updates the alert memory at the end of a trip and raises an arrival alert."""
@@ -553,6 +557,8 @@ def install(
                 prune(db)
 
             send_queued(db, cipher, notifier)
+            if "send" in alexa_hooks:
+                alexa_hooks["send"](db)
 
     def place_names():
         """Background job: names trip ends and alert locations. Runs separately from pushes and
@@ -630,7 +636,7 @@ def install(
     push_subscriptions.install(app, approved=approved, cipher=cipher, database=database)
 
     if alexa_api.enabled():
-        alexa_api.install(
+        alexa_hooks |= alexa_api.install(
             app,
             admin=admin,
             alert_memory=alert_memory,

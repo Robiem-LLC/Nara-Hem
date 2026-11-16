@@ -5,7 +5,12 @@
       "intents": [
         {
           "name": "WhereIsIntent",
-          "slots": [{ "name": "person", "type": "AMAZON.FirstName" }],
+          "slots": [
+            {
+              "name": "person",
+              "type": "AMAZON.FirstName"
+            }
+          ],
           "samples": [
             "where is {person}",
             "where's {person}",
@@ -19,7 +24,12 @@
         },
         {
           "name": "FindPhoneIntent",
-          "slots": [{ "name": "person", "type": "AMAZON.FirstName" }],
+          "slots": [
+            {
+              "name": "person",
+              "type": "AMAZON.FirstName"
+            }
+          ],
           "samples": [
             "find {person} phone",
             "to find {person} phone",
@@ -30,15 +40,157 @@
             "where is {person} phone"
           ]
         },
-        { "name": "AMAZON.YesIntent", "samples": [] },
-        { "name": "AMAZON.NoIntent", "samples": [] },
-        { "name": "AMAZON.HelpIntent", "samples": [] },
-        { "name": "AMAZON.StopIntent", "samples": [] },
-        { "name": "AMAZON.CancelIntent", "samples": [] },
-        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
-        { "name": "AMAZON.FallbackIntent", "samples": [] }
+        {
+          "name": "NotifyArrivalIntent",
+          "slots": [
+            {
+              "name": "person",
+              "type": "AMAZON.FirstName"
+            },
+            {
+              "name": "place",
+              "type": "SAVED_PLACE"
+            }
+          ],
+          "samples": [
+            "let me know when {person} gets home",
+            "tell me when {person} gets home",
+            "notify me when {person} gets home",
+            "to let me know when {person} gets home",
+            "to tell me when {person} gets home",
+            "let me know when {person} is home",
+            "tell me when {person} is home",
+            "notify me when {person} is home",
+            "to let me know when {person} is home",
+            "to tell me when {person} is home",
+            "let me know when {person} gets to {place}",
+            "tell me when {person} gets to {place}",
+            "notify me when {person} gets to {place}",
+            "to let me know when {person} gets to {place}",
+            "to tell me when {person} gets to {place}",
+            "let me know when {person} arrives at {place}",
+            "tell me when {person} arrives at {place}",
+            "notify me when {person} arrives at {place}",
+            "to let me know when {person} arrives at {place}",
+            "to tell me when {person} arrives at {place}",
+            "let me know when {person} is at {place}",
+            "tell me when {person} is at {place}",
+            "notify me when {person} is at {place}",
+            "to let me know when {person} is at {place}",
+            "to tell me when {person} is at {place}"
+          ]
+        },
+        {
+          "name": "NotifyLeaveIntent",
+          "slots": [
+            {
+              "name": "person",
+              "type": "AMAZON.FirstName"
+            },
+            {
+              "name": "place",
+              "type": "SAVED_PLACE"
+            }
+          ],
+          "samples": [
+            "let me know when {person} leaves",
+            "tell me when {person} leaves",
+            "notify me when {person} leaves",
+            "to let me know when {person} leaves",
+            "to tell me when {person} leaves",
+            "let me know when {person} leaves home",
+            "tell me when {person} leaves home",
+            "notify me when {person} leaves home",
+            "to let me know when {person} leaves home",
+            "to tell me when {person} leaves home",
+            "let me know when {person} leaves {place}",
+            "tell me when {person} leaves {place}",
+            "notify me when {person} leaves {place}",
+            "to let me know when {person} leaves {place}",
+            "to tell me when {person} leaves {place}",
+            "let me know when {person} has left {place}",
+            "tell me when {person} has left {place}",
+            "notify me when {person} has left {place}",
+            "to let me know when {person} has left {place}",
+            "to tell me when {person} has left {place}"
+          ]
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        }
       ],
-      "types": []
+      "types": [
+        {
+          "name": "SAVED_PLACE",
+          "values": [
+            {
+              "name": {
+                "value": "home"
+              }
+            },
+            {
+              "name": {
+                "value": "work"
+              }
+            },
+            {
+              "name": {
+                "value": "school"
+              }
+            },
+            {
+              "name": {
+                "value": "the office"
+              }
+            },
+            {
+              "name": {
+                "value": "grandma's house"
+              }
+            },
+            {
+              "name": {
+                "value": "the gym"
+              }
+            },
+            {
+              "name": {
+                "value": "the park"
+              }
+            },
+            {
+              "name": {
+                "value": "the grocery store"
+              }
+            }
+          ]
+        }
+      ]
     }
   }
 }

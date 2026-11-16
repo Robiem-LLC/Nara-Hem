@@ -5,6 +5,10 @@ Ask an Echo about your household:
 - "Alexa, ask Close to Home where Sam is." → "Sam has been at Home since 4:30 PM."
 - "Alexa, ask Close to Home where Maya is." → "Maya is driving near Route 9, Springfield."
 - "Alexa, ask Close to Home to find Sam's phone." → "Ringing Sam's phone now."
+- "Alexa, ask Close to Home to let me know when Mom gets home." → later, your Echo chimes: "From
+  Nara Hem: Mom has arrived home."
+- "Alexa, ask Close to Home to let me know when Maya leaves school." → "From Nara Hem: Maya has
+  left school."
 
 If Alexa mishears a name, it asks "Did you mean Maya?" when a household member's name is close.
 Answer yes or no.
@@ -19,6 +23,18 @@ Answer yes or no.
   answers along without keeping them (see the privacy policy).
 - Rings only work for phones with **Find my phone** turned on in the app.
 - Times are in your Echo's time zone.
+
+## Let me know when…
+
+- Works with any saved place: "…when Sam gets to Grandma's house", "…when Maya leaves the park".
+  Without a place, it means **Home**.
+- The first time, Alexa asks "Close to Home would like to set reminders. Is that OK?" Say **yes**
+  once; nothing needs doing in the Alexa app.
+- It's spoken as a reminder a few seconds after it happens. Each request is used once and lasts a
+  day. If Mom is already home, or Maya isn't at school, Alexa says so instead.
+- Arriving counts once the phone is inside the place; leaving counts once it's well outside, so
+  GPS wobble at the edge doesn't set it off.
+- Amazon hears the sentence it speaks ("Mom has arrived home"), and nothing else.
 
 ## Set it up
 

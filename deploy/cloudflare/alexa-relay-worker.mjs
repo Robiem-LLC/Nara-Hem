@@ -17,8 +17,16 @@
  * proves itself with FORWARD_SECRET. The forwarder exists because Amazon's skill service may
  * refuse to connect to some HTTPS addresses.
  *
+ * "Let me know when Maya gets home": when it happens, the household server asks /v1/notify to
+ * wake the skill for the Alexa user who asked (Amazon's Skill Messaging, which only the skill's
+ * owner can use). Amazon then sends the skill a request like any other, which reaches the server
+ * the usual way and lets it set a spoken reminder. The relay sends only the user, Amazon's
+ * region and the watch's random ID; nobody can choose what Alexa says.
+ *
  * Secrets: CLIENT_SECRET (also entered in the skill's account linking), SEAL_KEY (any long
- * random text; changing it unlinks every household) and FORWARD_SECRET (also in the forwarder).
+ * random text; changing it unlinks every household), FORWARD_SECRET (also in the forwarder), and
+ * SKILL_CLIENT_ID and SKILL_CLIENT_SECRET (the skill's "Alexa Skill Messaging" credentials,
+ * under Build, Permissions; without them only /v1/notify is off).
  * Variable: CLIENT_ID (default "nara-hem").
  *
  * Addresses for the skill's settings in the Alexa developer console:
@@ -27,10 +35,20 @@
  */
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const REVISION = 'alexa-3';
+const REVISION = 'alexa-4';
 const SERVER_CLIENT_ID = 'nara-hem-relay';
 const AMAZON_HOSTS = ['pitangui.amazon.com', 'layla.amazon.com', 'alexa.amazon.co.jp'];
 const MAX_BODY = 16384;
+
+// Amazon's Alexa API hosts for North America, Europe and the Far East.
+const ALEXA_APIS = [
+  'https://api.amazonalexa.com',
+  'https://api.eu.amazonalexa.com',
+  'https://api.fe.amazonalexa.com',
+];
+
+// How long Amazon keeps trying to deliver a wake-up.
+const WAKE_SECONDS = 600;
 
 /** The relay's addresses. */
 const ROUTES = {
@@ -40,7 +58,11 @@ const ROUTES = {
   'POST /token': (request, env) => token(request, env),
   'POST /skill': (request, env) => skill(request, env),
   'POST /forward': (request, env) => forward(request, env),
+  'POST /v1/notify': (request, env) => notify(request, env),
 };
+
+// The Skill Messaging access token, reused until shortly before it expires.
+let messaging = null;
 
 /** Encodes bytes as base64url without padding. */
 function b64url(bytes) {
@@ -426,6 +448,62 @@ async function forward(request, env) {
   const { body, alexa, refused } = await alexaBody(request);
   if (refused) return refused;
   return passOn(env, body, alexa, {});
+}
+
+/** Returns an access token for Amazon's Skill Messaging, or null if Amazon refuses. */
+async function messagingToken(env) {
+  if (messaging && messaging.expires > Date.now() + 60000) return messaging.token;
+  const reply = await fetch('https://api.amazon.com/auth/o2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: env.SKILL_CLIENT_ID,
+      client_secret: env.SKILL_CLIENT_SECRET,
+      scope: 'alexa:skill_messaging',
+    }).toString(),
+    redirect: 'manual',
+    signal: AbortSignal.timeout(7000),
+  });
+  const body = reply.ok ? await reply.json().catch(() => null) : null;
+  if (!body?.access_token) return null;
+  messaging = { token: body.access_token, expires: Date.now() + (body.expires_in || 3600) * 1000 };
+  return messaging.token;
+}
+
+/**
+ * A household server asks to wake the skill for the Alexa user who set a watch, so the skill can
+ * set its spoken reminder. Only the user, an Amazon region and a watch ID pass through.
+ */
+async function notify(request, env) {
+  if (!env.SKILL_CLIENT_ID || !env.SKILL_CLIENT_SECRET) return json({ error: 'Not set up' }, 503);
+  const text = await request.text();
+  let ask;
+  try {
+    ask = text.length <= 2048 ? JSON.parse(text) : null;
+  } catch {
+    ask = null;
+  }
+  const user = String(ask?.user || '');
+  const endpoint = String(ask?.endpoint || '');
+  const watch = String(ask?.watch || '');
+  if (
+    !/^amzn1\.ask\.account\.[A-Za-z0-9._-]{1,280}$/.test(user) ||
+    !ALEXA_APIS.includes(endpoint) ||
+    !/^[0-9a-f]{32}$/.test(watch)
+  ) {
+    return json({ error: 'Bad request' }, 400);
+  }
+  const token = await messagingToken(env);
+  if (!token) return json({ error: 'Amazon refused the relay' }, 502);
+  const reply = await fetch(`${endpoint}/v1/skillmessages/users/${encodeURIComponent(user)}`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { watch }, expiresAfterSeconds: WAKE_SECONDS }),
+    redirect: 'manual',
+    signal: AbortSignal.timeout(7000),
+  });
+  return reply.status === 202 ? json({ ok: true }, 202) : json({ error: 'Amazon refused it' }, 502);
 }
 
 export default {

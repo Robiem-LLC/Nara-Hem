@@ -10,7 +10,7 @@ from .accounts import (
     PhoneChallenge,
 )
 from .alerts import AlertMemory, PushDelivery, PushSubscription, ServerAlert
-from .alexa import AlexaLink
+from .alexa import AlexaLink, AlexaWatch
 from .base import Base
 from .devices import (
     ClientDevice,
@@ -28,6 +28,7 @@ from .trips import IndexedTrip, TripLabel
 __all__ = [
     "Base",
     "AlexaLink",
+    "AlexaWatch",
     "ContactChange",
     "Settings",
     "Outbox",

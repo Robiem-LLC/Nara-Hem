@@ -38,6 +38,13 @@ def match(lat, lon, places, accuracy=25.0):
     return near[0][0] if near else None
 
 
+def clearly_outside(lat, lon, place, accuracy):
+    """Returns True once a point is well clear of a saved place, so GPS drift at the edge doesn't
+    count as leaving.
+    """
+    return meters(lat, lon, place["lat"], place["lon"]) > place["radius"] + max(75.0, accuracy)
+
+
 def allowed(place, member, departure):
     """Returns whether the place's alert rules allow this member's arrival or departure alert. A
     place without rules alerts for everyone.
@@ -114,7 +121,7 @@ def on_fix(memory, member, lat, lon, accuracy, trip_id, now, places):
         nxt["inside"] = None
     if previous is not None and (current or {}).get("id") != previous["id"]:
         # Only count as left once clearly outside, so GPS drift at the edge doesn't alert.
-        if meters(lat, lon, previous["lat"], previous["lon"]) > previous["radius"] + max(75.0, fix):
+        if clearly_outside(lat, lon, previous, fix):
             if allowed(previous, member, departure=True):
                 alerts.append({"kind": "left", "place": previous["name"]})
                 nxt["departed_at"] = now

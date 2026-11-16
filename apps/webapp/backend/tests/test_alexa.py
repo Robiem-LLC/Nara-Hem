@@ -17,10 +17,10 @@ from nacl.signing import VerifyKey
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from narahem import alexa_api, alexa_speech, alexa_verify, demo_family
+from narahem import alexa_api, alexa_arrivals, alexa_speech, alexa_verify, demo_family
 from narahem.app import HASHER
 from narahem.data_service import canonical
-from narahem.models import Account, FindPhoneCommand, RosterRevision, ServiceState
+from narahem.models import Account, AlexaWatch, FindPhoneCommand, RosterRevision, ServiceState
 from tests import test_demo_family, test_relay, test_setup
 
 STORE_SKILL = "amzn1.ask.skill.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -215,6 +215,168 @@ class AlexaTests(unittest.TestCase):
         said, response = self.ask(access, "WhereIsIntent", "Maya")
         self.assertIn("link Nara Hem", said)
         self.assertEqual(response["response"]["card"], {"type": "LinkAccount"})
+
+    def tell(self, link_token, kind="IntentRequest", granted=True, **request):
+        """Sends an Alexa request for the arrival and departure watches and returns the reply."""
+        permissions = (
+            {"scopes": {alexa_arrivals.REMINDERS: {"status": "GRANTED"}}} if granted else {}
+        )
+        body = {
+            "version": "1.0",
+            "session": {"attributes": {}},
+            "context": {
+                "System": {
+                    "application": {"applicationId": STORE_SKILL},
+                    "user": {
+                        "userId": "amzn1.ask.account.synthetic",
+                        "accessToken": "sealed-by-the-relay",
+                        "permissions": permissions,
+                    },
+                    "apiEndpoint": "https://api.amazonalexa.com",
+                    "apiAccessToken": "synthetic-alexa-api-token",
+                }
+            },
+            "request": dict(request, type=kind, timestamp=now(), locale="en-US"),
+        }
+        reply = amazon(self.app).post(
+            "/alexa/skill", json=body, headers={"X-Narahem-Alexa-Token": link_token}
+        )
+        self.assertEqual(reply.status_code, 200, reply.text)
+        return reply.json()
+
+    def watch(self, token, intent, person, place=None, granted=True):
+        """Asks to be told when someone arrives at or leaves a place; returns what Alexa says."""
+        slots = {"person": {"value": person}}
+        if place:
+            slots["place"] = {"value": place}
+        reply = self.tell(token, granted=granted, intent={"name": intent, "slots": slots})
+        return reply["response"].get("outputSpeech", {}).get("text", ""), reply
+
+    def watches(self):
+        with Session(self.app.state.engine) as db:
+            return [
+                (w.place_name, w.event, w.happened is not None)
+                for w in db.scalars(select(AlexaWatch))
+            ]
+
+    def test_alexa_lets_you_know_when_someone_arrives_or_leaves(self):
+        family = self.move_in()
+        access = self.link()["access_token"]
+        maya = family.phones["Maya"]
+
+        # The first time, Alexa asks by voice for permission to set reminders.
+        said, reply = self.watch(access, "NotifyArrivalIntent", "Maya", granted=False)
+        directive = reply["response"]["directives"][0]
+        self.assertEqual(
+            (directive["type"], directive["name"]), ("Connections.SendRequest", "AskFor")
+        )
+        scope = directive["payload"]["permissionScopes"][0]["permissionScope"]
+        self.assertEqual(scope, alexa_arrivals.REMINDERS)
+        self.assertEqual(self.watches(), [])
+        # "Yes" comes back as a Connections.Response carrying the request.
+        reply = self.tell(
+            access,
+            kind="Connections.Response",
+            name="AskFor",
+            payload={"status": "ACCEPTED"},
+            token=directive["token"],
+        )
+        said = reply["response"]["outputSpeech"]["text"]
+        self.assertEqual(said, "Okay, I'll let you know when Maya gets home.")
+        self.assertEqual(self.watches(), [("Home", "arrive", False)])
+        # "No" sets nothing.
+        reply = self.tell(
+            access,
+            kind="Connections.Response",
+            name="AskFor",
+            payload={"status": "DENIED"},
+            token=directive["token"],
+        )
+        self.assertIn(
+            "only let you know if I may set reminders", reply["response"]["outputSpeech"]["text"]
+        )
+
+        # Already there, or not there to leave: said at once, nothing to wait for.
+        said, _ = self.watch(access, "NotifyArrivalIntent", "Maya", "Laurelhurst Park")
+        self.assertEqual(said, "Maya is already at Laurelhurst Park.")
+        said, _ = self.watch(access, "NotifyLeaveIntent", "Maya", "home")
+        self.assertEqual(said, "Maya isn't home right now.")
+        said, _ = self.watch(access, "NotifyArrivalIntent", "Maya", "Mars")
+        self.assertEqual(said, "You don't have a saved place called Mars.")
+        said, _ = self.watch(access, "NotifyLeaveIntent", "Maya", "Laurelhurst Park")
+        self.assertEqual(said, "Okay, I'll let you know when Maya leaves Laurelhurst Park.")
+        self.assertEqual(
+            sorted(self.watches()),
+            [("Home", "arrive", False), ("Laurelhurst Park", "leave", False)],
+        )
+
+        # Maya leaves the park: the departure happens; the arrival waits.
+        park = demo_family.PLACES["Laurelhurst Park"]
+        maya.location(park[0] + 0.01, park[1])
+        self.assertEqual(
+            sorted(self.watches()),
+            [("Home", "arrive", False), ("Laurelhurst Park", "leave", True)],
+        )
+        # She gets home: the arrival happens too.
+        maya.location(*demo_family.PLACES["Home"])
+        self.assertEqual(
+            sorted(self.watches()),
+            [("Home", "arrive", True), ("Laurelhurst Park", "leave", True)],
+        )
+
+        # The background job asks the relay to wake the skill for each.
+        woken = []
+
+        def relay(url, json=None, **kwargs):
+            woken.append((url, json))
+            return type("Reply", (), {"status_code": 202})()
+
+        with patch.object(alexa_arrivals.httpx, "post", relay):
+            self.app.state.deliveries()
+        self.assertEqual(len(woken), 2)
+        self.assertEqual({u for u, _ in woken}, {RELAY + "/v1/notify"})
+        sent = {w["user"] for _, w in woken}, {w["endpoint"] for _, w in woken}
+        self.assertEqual(sent, ({"amzn1.ask.account.synthetic"}, {"https://api.amazonalexa.com"}))
+
+        # Amazon wakes the skill: it sets a reminder that speaks a few seconds later.
+        reminders = []
+
+        def amazon_reminders(url, json=None, headers=None, **kwargs):
+            reminders.append((url, json, headers))
+            return type("Reply", (), {"status_code": 201})()
+
+        for _, wake in woken:
+            with patch.object(alexa_arrivals.httpx, "post", amazon_reminders):
+                reply = self.tell(
+                    access, kind="Messaging.MessageReceived", message={"watch": wake["watch"]}
+                )
+            self.assertEqual(reply["response"], {})
+        spoken = sorted(r[1]["alertInfo"]["spokenInfo"]["content"][0]["text"] for r in reminders)
+        self.assertEqual(
+            spoken,
+            [
+                "From Nara Hem: Maya has arrived home.",
+                "From Nara Hem: Maya has left Laurelhurst Park.",
+            ],
+        )
+        url, body, headers = reminders[0]
+        self.assertEqual(url, "https://api.amazonalexa.com/v1/alerts/reminders")
+        self.assertEqual(headers["Authorization"], "Bearer synthetic-alexa-api-token")
+        self.assertEqual(body["trigger"]["type"], "SCHEDULED_RELATIVE")
+        self.assertEqual(self.watches(), [], "each watch is used once")
+
+        # A wake-up for a watch that isn't there, or another link's, does nothing.
+        with patch.object(alexa_arrivals.httpx, "post", amazon_reminders):
+            reply = self.tell(access, kind="Messaging.MessageReceived", message={"watch": "0" * 32})
+        self.assertEqual((reply["response"], len(reminders)), ({}, 2))
+
+    def test_watches_expire_and_give_up(self):
+        self.move_in()
+        access = self.link()["access_token"]
+        self.watch(access, "NotifyArrivalIntent", "Maya")
+        with patch("time.time", return_value=time.time() + alexa_arrivals.WATCH_SECONDS + 1):
+            self.app.state.deliveries()
+        self.assertEqual(self.watches(), [], "a day later the watch is gone")
 
     def test_only_the_admin_can_link_and_a_new_password_ends_it(self):
         self.move_in()

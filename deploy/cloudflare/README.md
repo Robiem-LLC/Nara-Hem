@@ -87,9 +87,16 @@ Echo → Amazon → forwarder (Alexa-hosted, inside Amazon) → this relay → t
   may refuse to connect to some HTTPS endpoints, while ordinary HTTPS from inside Amazon works.
 - Each household server checks the skill ID and its own link token itself, and only signs in its
   own administrator.
+- **Wake-ups** (`POST /v1/notify`): for "let me know when Maya gets home", the household server
+  asks the relay to wake the skill for one Alexa user (Amazon's Skill Messaging). The body holds
+  only that user's Alexa ID, Amazon's API address and a watch ID; the relay checks all three,
+  uses `SKILL_CLIENT_ID` and `SKILL_CLIENT_SECRET` to send the message, and Amazon then calls the
+  household's server with a token that can set the reminder. Without those secrets it answers
+  503 and everything else keeps working.
 
 Secrets: `CLIENT_SECRET` (also entered in the skill's account linking), `SEAL_KEY` (long random
-text; changing it unlinks every household) and `FORWARD_SECRET` (also pasted into the forwarder).
+text; changing it unlinks every household) and `FORWARD_SECRET` (also pasted into the forwarder). For wake-ups: `SKILL_CLIENT_ID` and
+`SKILL_CLIENT_SECRET` (the skill's **Permissions → Alexa Skill Messaging** client ID and secret).
 Variable: `CLIENT_ID` (default `nara-hem`).
 
 ## Tests

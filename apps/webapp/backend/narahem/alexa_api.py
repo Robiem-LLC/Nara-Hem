@@ -12,6 +12,7 @@ keeps no database. The relay's address and the skill's ID are built into officia
 
 Alexa answers with what the admin's browser sees: everyone sharing their location. Rings are
 signed with the server's enrollment key, which the phones already accept from the admin.
+"Let me know when Maya gets home" (or "leaves school") is in alexa_arrivals.py.
 """
 
 import base64
@@ -32,12 +33,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from narahem import alexa_speech, alexa_verify, household_alerts, image_defaults
+from narahem import alexa_arrivals, alexa_speech, alexa_verify, household_alerts, image_defaults
 from narahem.app import DUMMY_HASH, HASHER, digest, trusted_accounts
 from narahem.data_service import audit, canonical
 from narahem.models import (
     Account,
     AlexaLink,
+    AlexaWatch,
     ClientDevice,
     EncryptedRecord,
     FindPhoneCapability,
@@ -363,20 +365,30 @@ def install(
         except concurrent.futures.TimeoutError:
             return None
 
+    def latest(db, account_id):
+        """Returns a member's phone and its latest shared location, decrypted: (None, None) when
+        there is none to use, and (phone, None) when the phone isn't sharing.
+        """
+        state = db.get(LatestState, ("location", account_id))
+        record = db.get(EncryptedRecord, state.record_id) if state else None
+        sender = db.get(ClientDevice, record.device_id) if record else None
+        if not sender or sender.status != "approved":
+            return None, None
+        if not sender.sharing:
+            return sender, None
+        try:
+            return sender, trip_processor.open_record(json.loads(record.envelope)["body"])
+        except (HTTPException, KeyError, ValueError):
+            return None, None
+
     def where_is(db, member, alexa):
         """Says where a member is, from the latest location their phone shared."""
         account_id, name = member
-        latest = db.get(LatestState, ("location", account_id))
-        record = db.get(EncryptedRecord, latest.record_id) if latest else None
-        sender = db.get(ClientDevice, record.device_id) if record else None
-        if not sender or sender.status != "approved":
+        sender, payload = latest(db, account_id)
+        if not sender:
             return f"I don't have a location for {name}."
-        if not sender.sharing:
+        if payload is None:
             return f"{name} isn't sharing a location right now."
-        try:
-            payload = trip_processor.open_record(json.loads(record.envelope)["body"])
-        except (HTTPException, KeyError, ValueError):
-            return f"I don't have a location for {name}."
         data = payload["data"]
         lat, lon = float(data["lat"]), float(data["lon"])
         place = household_alerts.match(
@@ -442,6 +454,10 @@ def install(
             return {"version": "1.0", "response": {}}
         if kind == "LaunchRequest":
             return say("Ask me where someone is, or to find someone's phone.", end=False)
+        if kind == "Connections.Response":
+            return permission_answer(db, alexa, link)
+        if kind == "Messaging.MessageReceived":
+            return wake_up(db, alexa, link)
         intent = request.get("intent", {})
         name = intent.get("name", "")
         members = household(db)
@@ -449,20 +465,29 @@ def install(
         if name == "AMAZON.YesIntent" and pending:
             member = next((m for m in members if m[0] == pending.get("account")), None)
             if member:
-                return act(db, pending.get("ask"), member, alexa, link, background_tasks)
+                return act(db, pending, member, alexa, link, background_tasks)
         if name in ("AMAZON.NoIntent", "AMAZON.StopIntent", "AMAZON.CancelIntent"):
             return say("Okay.")
-        if name in ("WhereIsIntent", "FindPhoneIntent"):
-            heard = ((intent.get("slots") or {}).get("person") or {}).get("value") or ""
-            ask = "where" if name == "WhereIsIntent" else "ring"
+        if name in ("WhereIsIntent", "FindPhoneIntent", "NotifyArrivalIntent", "NotifyLeaveIntent"):
+            slots = intent.get("slots") or {}
+            heard = (slots.get("person") or {}).get("value") or ""
+            ask = {"WhereIsIntent": "where", "FindPhoneIntent": "ring"}.get(name, "notify")
+            pending = {"ask": ask}
+            if ask == "notify":
+                pending["event"] = "leave" if name == "NotifyLeaveIntent" else "arrive"
+                place = place_named(db, (slots.get("place") or {}).get("value"))
+                if not place:
+                    spoken = (slots.get("place") or {}).get("value") or "home"
+                    return say(f"You don't have a saved place called {spoken}.")
+                pending["place"] = place["id"]
             found, member = alexa_speech.match_name(heard, members)
             if found == "exact":
-                return act(db, ask, member, alexa, link, background_tasks)
+                return act(db, pending, member, alexa, link, background_tasks)
             if found == "close":
                 return say(
                     f"Did you mean {member[1]}?",
                     end=False,
-                    attributes={"pending": {"ask": ask, "account": member[0]}},
+                    attributes={"pending": dict(pending, account=member[0])},
                 )
             who = f"anyone called {heard}" if heard else "who you meant"
             return say(f"I couldn't find {who}. You can ask about {alexa_speech.names(members)}.")
@@ -472,11 +497,159 @@ def install(
             end=False,
         )
 
-    def act(db, ask, member, alexa, link, background_tasks):
-        """Answers a where-is question or rings a phone."""
-        if ask == "ring":
+    def act(db, pending, member, alexa, link, background_tasks):
+        """Answers a where-is question, rings a phone or starts an arrival watch."""
+        if pending.get("ask") == "ring":
             return say(ring(db, member, link, background_tasks))
+        if pending.get("ask") == "notify":
+            place = next((p for p in server_places(db) if p["id"] == pending.get("place")), None)
+            if not place:
+                return say("That place isn't saved any more.")
+            event = "leave" if pending.get("event") == "leave" else "arrive"
+            return notify_when(db, alexa, link, member, place, event)
         return say(where_is(db, member, alexa))
+
+    def place_named(db, heard):
+        """Returns the saved place Alexa heard ("home" when none was said), or None."""
+        places = server_places(db)
+        found, match = alexa_speech.match_name(
+            heard or "home", [(p["id"], p["name"]) for p in places]
+        )
+        return next((p for p in places if p["id"] == match[0]), None) if found else None
+
+    def inside(place, payload):
+        """Returns True if a decrypted location is inside a saved place."""
+        data = payload["data"]
+        accuracy = float(data.get("accuracy") or 25)
+        return bool(
+            household_alerts.match(float(data["lat"]), float(data["lon"]), [place], accuracy)
+        )
+
+    def notify_when(db, alexa, link, member, place, event):
+        """Starts a watch for a member reaching or leaving a place, asking for reminders
+        permission first.
+        """
+        account_id, name = member
+        _, payload = latest(db, account_id)
+        where = "home" if alexa_arrivals.is_home(place["name"]) else f"at {place['name']}"
+        if event == "arrive" and payload and inside(place, payload):
+            return say(f"{name} is already {where}.")
+        if event == "leave" and not payload:
+            return say(f"I don't know where {name} is right now.")
+        if event == "leave" and not inside(place, payload):
+            return say(f"{name} isn't {where} right now.")
+        if not alexa_arrivals.granted(alexa):
+            asked = {"m": account_id, "p": place["id"], "e": event}
+            return alexa_arrivals.ask_permission(json.dumps(asked))
+        address = alexa_arrivals.endpoint(alexa)
+        user = (alexa_arrivals.system(alexa).get("user") or {}).get("userId") or ""
+        if not address or not user or len(user) > 300:
+            return say("I can't set that up from this device.")
+        watches = db.scalars(select(AlexaWatch).where(AlexaWatch.link_id == link.id)).all()
+        for watch in watches:
+            if (watch.member_id, watch.place_id, watch.event) == (account_id, place["id"], event):
+                db.delete(watch)
+        if len(watches) >= alexa_arrivals.MAX_WATCHES:
+            return say("You're already waiting on too many people. Try again later.")
+        now = time.time()
+        db.add(
+            AlexaWatch(
+                id=secrets.token_hex(16),
+                link_id=link.id,
+                member_id=account_id,
+                place_id=place["id"],
+                place_name=place["name"][:80],
+                event=event,
+                alexa_user=user,
+                api_endpoint=address,
+                created=now,
+                expires=now + alexa_arrivals.WATCH_SECONDS,
+                attempts=0,
+            )
+        )
+        db.commit()
+        return say(alexa_arrivals.promise(name, place["name"], event))
+
+    def permission_answer(db, alexa, link):
+        """Carries on after Alexa asked by voice for permission to set reminders."""
+        request = alexa.get("request") or {}
+        if request.get("name") != "AskFor":
+            return say("Okay.")
+        if (request.get("payload") or {}).get("status") != "ACCEPTED":
+            return say("Okay. I can only let you know if I may set reminders.")
+        try:
+            asked = json.loads(request.get("token") or "")
+        except ValueError:
+            asked = {}
+        member = next((m for m in household(db) if m[0] == asked.get("m")), None)
+        place = next((p for p in server_places(db) if p["id"] == asked.get("p")), None)
+        if not member or not place:
+            return say("Please ask me again.")
+        event = "leave" if asked.get("e") == "leave" else "arrive"
+        return notify_when(db, alexa, link, member, place, event)
+
+    def wake_up(db, alexa, link):
+        """Amazon woke the skill because a watched member arrived or left: sets the spoken
+        reminder.
+        """
+        message = (alexa.get("request") or {}).get("message") or {}
+        watch = db.get(AlexaWatch, str(message.get("watch") or ""))
+        if watch and watch.link_id == link.id and watch.happened:
+            name = member_name(db, watch.member_id)
+            text = alexa_arrivals.announcement(name, watch.place_name, watch.event)
+            if alexa_arrivals.set_reminder(alexa, text):
+                db.delete(watch)
+            else:
+                watch.notified = None  # let the next round ask the relay again
+            db.commit()
+        return {"version": "1.0", "response": {}}
+
+    def watch_fix(db, device, lat, lon, accuracy):
+        """Marks this member's watches as happened when a new location is inside the place (an
+        arrival) or clearly away from it (a departure). Called for every location the server
+        reads; the caller commits.
+        """
+        now = time.time()
+        watches = db.scalars(
+            select(AlexaWatch).where(
+                AlexaWatch.member_id == device.account_id,
+                AlexaWatch.happened.is_(None),
+                AlexaWatch.expires > now,
+            )
+        ).all()
+        if not watches:
+            return
+        places = {p["id"]: p for p in server_places(db)}
+        for watch in watches:
+            place = places.get(watch.place_id)
+            if not place:
+                continue
+            if watch.event == "leave":
+                done = household_alerts.clearly_outside(lat, lon, place, accuracy)
+            else:
+                done = household_alerts.match(lat, lon, [place], accuracy) is not None
+            if done:
+                watch.happened = now
+
+    def send_wake_ups(db):
+        """Background job: asks the relay to wake the skill for watches that happened, and clears
+        ones that expired or never got through.
+        """
+        relay, now = store().get("relay"), time.time()
+        for watch in db.scalars(select(AlexaWatch)).all():
+            if watch.happened is None:
+                if watch.expires < now:
+                    db.delete(watch)
+                continue
+            if now - watch.happened > alexa_arrivals.NOTICE_SECONDS or not relay:
+                db.delete(watch)
+                continue
+            if watch.notified and now - watch.notified < alexa_arrivals.RETRY_SECONDS:
+                continue
+            watch.attempts += 1
+            if alexa_arrivals.wake(relay, watch):
+                watch.notified = now
+        db.commit()
 
     @app.get("/alexa/info")
     def info():
@@ -528,3 +701,5 @@ def install(
                 link.last_used = time.time()
                 db.commit()
             return answer(db, alexa, link, background_tasks)
+
+    return {"fix": watch_fix, "send": send_wake_ups}
