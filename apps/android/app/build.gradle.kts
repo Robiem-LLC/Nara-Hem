@@ -111,7 +111,7 @@ androidComponents {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2025.11.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
@@ -119,26 +119,26 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.1")
     implementation(platform("com.google.firebase:firebase-bom:35.0.2"))
     implementation("com.google.firebase:firebase-messaging")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
     implementation("com.goterl:lazysodium-android:5.2.0@aar")
-    implementation("net.java.dev.jna:jna:5.17.0@aar")
-    "googleImplementation"("com.google.android.gms:play-services-maps:19.2.0")
-    "osmImplementation"("org.maplibre.gl:android-sdk:11.13.0")
+    implementation("net.java.dev.jna:jna:5.19.1@aar")
+    "googleImplementation"("com.google.android.gms:play-services-maps:20.1.0")
+    "osmImplementation"("org.maplibre.gl:android-sdk:13.7.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
-    testImplementation(platform("androidx.compose:compose-bom:2025.11.01"))
+    testImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
     // Declares the empty activity createComposeRule() hosts screens in; debug builds only.
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("androidx.test.ext:junit:1.3.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.1")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:5.5.1")
+    testImplementation("org.json:json:20260814")
     // Desktop libsodium and JNA, so the real encryption code runs in JVM tests (see DesktopSodium).
     testImplementation("com.goterl:lazysodium-java:5.2.0")
 }
@@ -148,7 +148,7 @@ dependencies {
 val robolectricAndroid: Configuration by configurations.creating
 dependencies {
     // The image Robolectric 4.17 uses for targetSdk 36; update both together.
-    robolectricAndroid("org.robolectric:android-all-instrumented:16-robolectric-13921718-i7")
+    robolectricAndroid("org.robolectric:android-all-instrumented:17-robolectric-16653203-i7")
 }
 val robolectricJars = layout.buildDirectory.dir("robolectric-jars")
 val copyRobolectricJars by tasks.registering(Copy::class) {
