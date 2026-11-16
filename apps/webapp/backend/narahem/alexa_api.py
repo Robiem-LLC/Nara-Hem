@@ -594,7 +594,8 @@ def install(
         """
         message = (alexa.get("request") or {}).get("message") or {}
         watch = db.get(AlexaWatch, str(message.get("watch") or ""))
-        if watch and watch.link_id == link.id and watch.happened:
+        user = (alexa_arrivals.system(alexa).get("user") or {}).get("userId")
+        if watch and watch.link_id == link.id and watch.alexa_user == user and watch.happened:
             name = member_name(db, watch.member_id)
             text = alexa_arrivals.announcement(name, watch.place_name, watch.event)
             if alexa_arrivals.set_reminder(alexa, text):
@@ -685,11 +686,15 @@ def install(
             except alexa_verify.NotFromAmazon:
                 return JSONResponse({"detail": "Not a request from Amazon"}, 400)
             link = db.scalar(select(AlexaLink).where(AlexaLink.access == digest(token)))
+            # A wake-up can come hours after anyone last spoke to the skill, with the token Amazon
+            # last had. It can only speak for a watch this link set up, so an expired token still
+            # counts for it.
+            wake = (alexa.get("request") or {}).get("type") == "Messaging.MessageReceived"
             if (
                 not token
                 or not link
                 or link.kind != "store"
-                or link.access_expires < time.time()
+                or (link.access_expires < time.time() and not wake)
                 or not current_link(db, link)
             ):
                 return say(

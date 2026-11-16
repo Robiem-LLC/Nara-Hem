@@ -14,13 +14,20 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from fastapi.testclient import TestClient
 from nacl.signing import VerifyKey
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from narahem import alexa_api, alexa_arrivals, alexa_speech, alexa_verify, demo_family
 from narahem.app import HASHER
 from narahem.data_service import canonical
-from narahem.models import Account, AlexaWatch, FindPhoneCommand, RosterRevision, ServiceState
+from narahem.models import (
+    Account,
+    AlexaLink,
+    AlexaWatch,
+    FindPhoneCommand,
+    RosterRevision,
+    ServiceState,
+)
 from tests import test_demo_family, test_relay, test_setup
 
 STORE_SKILL = "amzn1.ask.skill.aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -345,7 +352,13 @@ class AlexaTests(unittest.TestCase):
             reminders.append((url, json, headers))
             return type("Reply", (), {"status_code": 201})()
 
-        for _, wake in woken:
+        # The second wake-up comes after the link's access token has expired: Amazon may send the
+        # token it last had, and that still counts for a wake-up (but not for questions).
+        for number, (_, wake) in enumerate(woken):
+            if number:
+                with Session(self.app.state.engine) as db:
+                    db.execute(update(AlexaLink).values(access_expires=time.time() - 60))
+                    db.commit()
             with patch.object(alexa_arrivals.httpx, "post", amazon_reminders):
                 reply = self.tell(
                     access, kind="Messaging.MessageReceived", message={"watch": wake["watch"]}
@@ -364,6 +377,9 @@ class AlexaTests(unittest.TestCase):
         self.assertEqual(headers["Authorization"], "Bearer synthetic-alexa-api-token")
         self.assertEqual(body["trigger"]["type"], "SCHEDULED_RELATIVE")
         self.assertEqual(self.watches(), [], "each watch is used once")
+        intent = {"name": "WhereIsIntent", "slots": {"person": {"value": "Maya"}}}
+        expired = self.tell(access, intent=intent)
+        self.assertIn("link", expired["response"]["outputSpeech"]["text"])
 
         # A wake-up for a watch that isn't there, or another link's, does nothing.
         with patch.object(alexa_arrivals.httpx, "post", amazon_reminders):

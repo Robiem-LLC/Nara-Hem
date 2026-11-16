@@ -97,6 +97,10 @@ Echo → Amazon → forwarder (Alexa-hosted, inside Amazon) → this relay → t
 Secrets: `CLIENT_SECRET` (also entered in the skill's account linking), `SEAL_KEY` (long random
 text; changing it unlinks every household) and `FORWARD_SECRET` (also pasted into the forwarder). For wake-ups: `SKILL_CLIENT_ID` and
 `SKILL_CLIENT_SECRET` (the skill's **Permissions → Alexa Skill Messaging** client ID and secret).
+In the skill itself, turn on **Permissions → Reminders** and paste
+[`../alexa/interaction-model.json`](../alexa/interaction-model.json) as its interaction model.
+Older skill versions keep working with a newer server and relay; they just don't offer "let me
+know when".
 Variable: `CLIENT_ID` (default `nara-hem`).
 
 ## Tests
