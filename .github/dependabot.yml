@@ -1,0 +1,55 @@
+# Monthly dependency updates, one grouped pull request per ecosystem and folder. A new release
+# must be a week old before it's proposed, so a bad or hijacked release has time to be caught.
+# Not watched: the PostgreSQL image in the stack files (a major version needs a planned upgrade)
+# and the Alexa forwarder (it runs inside Amazon and is updated by hand).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directories: [/, /apps/webapp/frontend]
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        patterns: ['*']
+
+  - package-ecosystem: pip
+    directories: [/apps/webapp/backend, /tools/format]
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ['*']
+
+  - package-ecosystem: gradle
+    directory: /apps/android
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      android:
+        patterns: ['*']
+
+  - package-ecosystem: docker
+    directories: [/, /site]
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns: ['*']
