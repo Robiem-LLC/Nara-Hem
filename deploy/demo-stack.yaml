@@ -19,8 +19,7 @@ services:
     volumes:
       - ${NARAHEM_DIR:-/opt/docker/narahem-demo}/server-data:/data
     ports:
-      # Plain HTTP for your proxy or tunnel; only this server can reach it unless NARAHEM_BIND_ADDRESS says otherwise.
-      - '${NARAHEM_BIND_ADDRESS:-127.0.0.1}:${NARAHEM_PORT:-8187}:8080'
+      - '${NARAHEM_PORT:-8187}:8080' #plain HTTP, only for your proxy/tunnel
     depends_on:
       database:
         condition: service_healthy
