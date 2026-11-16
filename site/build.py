@@ -59,6 +59,32 @@ GOOGLE_KEY = "SITE_GOOGLE_MAPS_API_KEY"
 MAP_STYLE = WEB / "frontend/src/mapstyle.mjs"
 
 
+def social_tags(text, page):
+    """Adds the link-preview tags chat apps and social sites read (Open Graph, and X's card),
+    from the page's own title and description, with the shared 1200x630 preview picture.
+    Redirect pages are left alone.
+    """
+    if 'http-equiv="refresh"' in text:
+        return text
+    title = re.search(r"<title>(.*?)</title>", text, re.S).group(1).strip()
+    found = re.search(r'name="description"\s+content="([^"]*)"', text)
+    description = " ".join(found.group(1).split()) if found else ""
+    tags = {
+        "og:type": "website",
+        "og:site_name": "{{name}}",
+        "og:title": title,
+        "og:description": description,
+        "og:url": "https://{{domain}}/" + ("" if page == "index.html" else page),
+        "og:image": "https://{{domain}}/preview.png",
+        "og:image:width": "1200",
+        "og:image:height": "630",
+        "og:image:alt": "{{name}}: a self-hosted family tracking ecosystem",
+    }
+    block = "".join(f'    <meta property="{k}" content="{v}" />\n' for k, v in tags.items() if v)
+    block += '    <meta name="twitter:card" content="summary_large_image" />\n'
+    return text.replace("  </head>", block + "  </head>", 1)
+
+
 def versioned(output):
     """Adds each local script and style's content hash to its address in every page, so no cache,
     Cloudflare's or a browser's, ever serves an old copy after an update.
@@ -166,9 +192,12 @@ def main(media, output):
     (output / "media").mkdir(parents=True)
     for page in ("index.html", "privacy.html", "terms.html", "setup.html", "demo.html"):
         text = (HERE / page).read_text()
+        if values["domain"]:  # previews need the site's full address
+            text = social_tags(text, page)
         text = re.sub(r"\{\{(\w+)\}\}", lambda m: values[m.group(1)], text)
         (output / page).write_text(text)
     shutil.copy(HERE / "style.css", output)
+    shutil.copy(HERE / "preview.png", output)
     shutil.copy(STACK, output / "narahem-stack.yaml")
     icon = Image.open(ICON).convert("RGB")
     for size in (64, 256):
