@@ -124,6 +124,10 @@ class SettingsViewModel(
             "PUT"
         )
         val updated = reply.getString("username")
+        // Re-save the profile photo under the new name, so phones on older app versions, which
+        // show the profile's name, see the change too. Best effort.
+        val own = session.current.people.firstOrNull { it.id == session.current.account?.id }
+        own?.photo?.let { photo -> runCatching { household?.saveProfilePhoto(updated, photo) } }
         session.update { state ->
             state.copy(
                 account = state.account?.copy(name = updated),

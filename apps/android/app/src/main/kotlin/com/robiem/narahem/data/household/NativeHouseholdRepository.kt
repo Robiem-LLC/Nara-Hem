@@ -853,8 +853,9 @@ class NativeHouseholdRepository(
         val people = membership.map { (id, name) ->
             val location = locations[id]
             val data = location?.getJSONObject("data")
+            // The server's name is current; a profile keeps the name from when its photo was set.
             HouseholdPerson(
-                id, profiles[id]?.optString("name")?.takeIf { it.isNotBlank() } ?: name,
+                id, name.takeIf { it.isNotBlank() } ?: profiles[id]?.optString("name") ?: "Member",
                 data?.optDouble("lat"), data?.optDouble("lon"), data?.optDouble("accuracy"),
                 location?.optLong("captured_at") ?: 0, profiles[id]?.optString("photo"),
                 data?.optDouble("speed_mps")?.takeIf { it.isFinite() },

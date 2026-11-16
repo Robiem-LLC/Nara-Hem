@@ -70,8 +70,19 @@ final class SettingsViewModel {
                     verified: previous.verified)
             }
             self.session.message = "Username updated to \(updated)."
+            await self.resaveProfile(name: updated)
             await self.session.refreshNow()
         }
+    }
+
+    /// Re-saves this member's profile photo under a new name, so phones on older app versions,
+    /// which show the profile's name, see the change too. Best effort.
+    private func resaveProfile(name: String) async {
+        let own = session.members.first { $0.id == session.account?.id }
+        guard let photo = own?.photo, let comma = photo.firstIndex(of: ","),
+            let jpeg = Data(base64Encoded: String(photo[photo.index(after: comma)...]))
+        else { return }
+        try? await household.savePhoto(jpeg: jpeg, name: name)
     }
 
     /// Crops and compresses a photo to a small JPEG and publishes it.

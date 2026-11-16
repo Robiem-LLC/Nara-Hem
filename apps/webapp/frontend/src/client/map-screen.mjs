@@ -661,6 +661,8 @@ async function refresh() {
   const records = r.records;
   const directory = await state.api('/api/household/members');
   const tracked = new Set(directory.members.filter((m) => m.role !== 'admin').map((m) => m.id));
+  // The server's username is current; a profile keeps the name from when its photo was set.
+  const usernames = new Map(directory.members.map((m) => [m.id, m.username]));
   state.states = records.filter((p) => p.kind !== 'location' || tracked.has(p.entity_id));
   state.markers.forEach((marker) => state.map.removeLayer(marker));
   state.markers = [];
@@ -701,7 +703,12 @@ async function refresh() {
     })),
   );
   const points = personLocations.map((person, index) =>
-    showMember(person, fan[index], profiles.get(person.state.entity_id)),
+    showMember(
+      person,
+      fan[index],
+      profiles.get(person.state.entity_id),
+      usernames.get(person.state.entity_id),
+    ),
   );
   for (const p of places) showPlace(p);
   if (state.mode === 'map' && points.length) {
@@ -713,10 +720,10 @@ async function refresh() {
 }
 
 /** Adds a member's marker and list row. Returns their position for framing the map. */
-function showMember(person, layout, profile) {
+function showMember(person, layout, profile, username) {
   const p = person.state;
   const f = person.fix;
-  const name = String(profile?.name || `Member ${p.entity_id.slice(0, 8)}`);
+  const name = String(username || profile?.name || `Member ${p.entity_id.slice(0, 8)}`);
   const fresh = freshness(p);
   const stale = fresh.alarming;
   const fallback = f.lat.toFixed(5) + ', ' + f.lon.toFixed(5);

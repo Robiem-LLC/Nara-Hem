@@ -339,7 +339,9 @@ class NativeHouseholdRepositoryTest {
         // Members who can't list accounts fall back to the sharing audience names.
         fake.eligible = JSONArray().put(JSONObject().put("id", owner).put("name", "Owner"))
         val person = repo.household().people.single()
-        assertEquals("Alex", person.name)
+        // The server's name wins over the name saved with the profile photo, which can be stale.
+        assertEquals("Owner", person.name)
+        assertEquals("data:image/jpeg;base64,AA==", person.photo)
         assertEquals(1.5, person.latitude!!, 0.0)
         assertEquals(55, person.batteryPct)
         assertEquals(true, person.charging)

@@ -377,7 +377,7 @@ final class TrustedHouseholdTests: XCTestCase {
                 "profile:\(owner)",
                 [
                     "id": "p", "kind": "profile", "operation": "upsert", "entity_id": owner,
-                    "data": ["name": "Alex", "photo": "data:image/jpeg;base64,AA=="],
+                    "data": ["name": "Old name", "photo": "data:image/jpeg;base64,AA=="],
                 ]
             ),
             (
@@ -409,7 +409,9 @@ final class TrustedHouseholdTests: XCTestCase {
         let snapshot = try await household.snapshot()
         XCTAssertEqual(snapshot.members.count, 2)
         let alex = snapshot.members[0]
-        XCTAssertEqual(alex.name, "Alex")
+        // The server's username wins over the name saved with the profile photo.
+        XCTAssertEqual(alex.name, "alex")
+        XCTAssertEqual(alex.photo, "data:image/jpeg;base64,AA==")
         XCTAssertEqual(alex.lat, 1.5)
         XCTAssertEqual(alex.battery, 55)
         XCTAssertEqual(alex.charging, true)

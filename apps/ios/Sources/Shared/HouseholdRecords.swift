@@ -51,7 +51,9 @@ extension TrustedHousehold {
             let profile = currentProfiles[id] ?? [:]
             return HouseholdMember(
                 id: id,
-                name: (profile["name"] as? String) ?? (raw["username"] as? String) ?? "Member",
+                // The server's username is current; a profile keeps the name from when its
+                // photo was set.
+                name: (raw["username"] as? String) ?? (profile["name"] as? String) ?? "Member",
                 lat: (data?["lat"] as? NSNumber)?.doubleValue,
                 lon: (data?["lon"] as? NSNumber)?.doubleValue,
                 accuracy: (data?["accuracy"] as? NSNumber)?.doubleValue,
