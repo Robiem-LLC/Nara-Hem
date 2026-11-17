@@ -45,33 +45,31 @@ def granted(alexa):
 
 
 def reminders_accepted(payload):
-        # Version 2 response with status at payload level.
-        for status, expected in (("ACCEPTED", True), ("DENIED", False)):
-            payload = {
-                "permissionScopes": [
-                    {
-                        "permissionScope": alexa_arrivals.REMINDERS,
-                        "consentLevel": "ACCOUNT",
-                    }
-                ],
-                "status": status,
-            }
-            self.assertEqual(
-                alexa_arrivals.reminders_accepted(payload),
-                expected,
-            )
-        # A status alone cannot approve a different scope.
-        self.assertFalse(
-            alexa_arrivals.reminders_accepted(
-                {
-                    "permissionScopes": [
-                        {"permissionScope": "other:permission"}
-                    ],
-                    "status": "ACCEPTED",
-                }
-            )
-        )
-
+    """Check whether Alexa accepted reminders permission."""
+    scopes = payload.get("permissionScopes")
+    if isinstance(scopes, dict):
+        scopes = [scopes]
+    if isinstance(scopes, list):
+        matching = [
+            scope
+            for scope in scopes
+            if isinstance(scope, dict)
+            and scope.get("permissionScope") == REMINDERS
+        ]
+        if not matching:
+            return False
+        if any(scope.get("status") == "ACCEPTED" for scope in matching):
+            return True
+        if any(
+            scope.get("status") in ("DENIED", "NOT_ANSWERED", "REDIRECT_TO_APP")
+            for scope in matching
+        ):
+            return False
+        return payload.get("status") == "ACCEPTED"
+    return (
+        payload.get("permissionScope") == REMINDERS
+        and payload.get("status") == "ACCEPTED"
+    )
 
 
 def endpoint(alexa):
