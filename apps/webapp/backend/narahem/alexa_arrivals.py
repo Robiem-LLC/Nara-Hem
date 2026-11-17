@@ -38,10 +38,35 @@ def system(alexa):
     return (alexa.get("context") or {}).get("System") or {}
 
 
+
 def granted(alexa):
-    """Returns True if the user has let the skill set reminders."""
-    scopes = ((system(alexa).get("user") or {}).get("permissions") or {}).get("scopes") or {}
-    return (scopes.get(REMINDERS) or {}).get("status") == "GRANTED"
+    """Check whether Alexa has granted reminders access."""
+    sys = system(alexa)
+    user = sys.get("user") or {}
+    permissions = user.get("permissions") or {}
+    scopes = permissions.get("scopes") or {}
+    status = (scopes.get(REMINDERS) or {}).get("status")
+    if status == "GRANTED":
+        return True
+    if not permissions.get("consentToken"):
+        return False
+    api = endpoint(alexa)
+    token = sys.get("apiAccessToken")
+    if not api or not token:
+        return None
+    try:
+        response = httpx.get(
+            api + "/v1/alerts/reminders",
+            headers={"Authorization": "Bearer " + token},
+            timeout=2,
+        )
+    except httpx.HTTPError:
+        return None
+    if response.status_code == 200:
+        return True
+    if response.status_code in (401, 403):
+        return False
+    return None
 
 
 def reminders_accepted(payload):
