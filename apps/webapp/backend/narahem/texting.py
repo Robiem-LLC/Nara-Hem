@@ -7,16 +7,26 @@ credit, Nära Hem uses email only.
 
 import os
 import re
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import HTTPException
 
 ENVIRONMENT_KEY = "NARAHEM_TEXTBELT_KEY"
 TEXTBELT = "https://textbelt.com"
+# Where the apps will be downloaded once they are in the stores.
+STORE_DOMAINS = ("apps.apple.com", "play.google.com")
 
 
 class TextingError(Exception):
-    """A text could not be sent or the key could not be checked. The message is safe to show."""
+    """A text could not be sent or the key could not be checked. The message is safe to show;
+    reason is Textbelt's own words, if it gave any.
+    """
+
+    def __init__(self, message, reason=None):
+        """Keeps Textbelt's reason beside the message shown."""
+        super().__init__(message)
+        self.reason = reason
 
 
 def phone_number(value):
@@ -46,13 +56,28 @@ def hint(key):
     return "•" * 8 + key[-4:] if len(key) > 8 else "•" * 8
 
 
-def describe(error):
-    """Turns a Textbelt error into advice for the administrator."""
+def link_domains(public_url, links=()):
+    """Returns the domains this server's texts link to, for Textbelt's whitelist: the server's
+    own address, the app download links in invitations and the app stores.
+    """
+    domains = []
+    for url in (public_url, *links):
+        host = urlsplit(url or "").hostname
+        if host and host not in domains:
+            domains.append(host)
+    return domains + [d for d in STORE_DOMAINS if d not in domains]
+
+
+def describe(error, domains=()):
+    """Turns a Textbelt error into advice for the administrator, naming the domains to whitelist
+    when links were refused.
+    """
     text = str(error or "").strip() or "Textbelt did not say why"
     if re.search(r"url|link", text, re.IGNORECASE):
+        listing = ", ".join(domains) or "your server's address and the app download sites"
         return (
             text + " Textbelt only sends links once your key is approved for them: request it at "
-            "textbelt.com/whitelist, listing your server's address and the app download sites."
+            f"textbelt.com/whitelist, listing {listing}."
         )
     return text
 
@@ -72,7 +97,7 @@ class Textbelt:
         except (httpx.HTTPError, ValueError) as error:
             raise TextingError("Textbelt could not be reached") from error
         if not data.get("success"):
-            raise TextingError(describe(data.get("error")))
+            raise TextingError(describe(data.get("error")), data.get("error"))
         return int(data.get("quotaRemaining", 0))
 
     def send(self, key, phone, message):
@@ -87,5 +112,5 @@ class Textbelt:
         except (httpx.HTTPError, ValueError) as error:
             raise TextingError("Textbelt could not be reached") from error
         if not data.get("success"):
-            raise TextingError(describe(data.get("error")))
+            raise TextingError(describe(data.get("error")), data.get("error"))
         return int(data.get("quotaRemaining", 0))

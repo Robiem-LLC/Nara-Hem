@@ -52,7 +52,7 @@ class FakeTextbelt:
     def send(self, key, phone, message):
         """Records the text and spends one credit."""
         if self.refuse:
-            raise texting.TextingError(texting.describe(self.refuse))
+            raise texting.TextingError(texting.describe(self.refuse), self.refuse)
         self.sent.append((phone, message))
         self.keys[key] -= 1
         return self.keys[key]
@@ -238,6 +238,7 @@ class TextingTests(unittest.TestCase):
         self.assertEqual(resend.status_code, 202)
         self.assertEqual(len(self.texts.sent), 1)
 
+    @patch.dict(os.environ, APP_LINKS)
     def test_a_test_text_shows_why_links_are_refused(self):
         self.turn_on()
         sent = self.client.post("/api/texting/test", json={"phone": KIM})
@@ -247,7 +248,15 @@ class TextingTests(unittest.TestCase):
         self.texts.refuse = "Sorry, URLs are not allowed for this key."
         refused = self.client.post("/api/texting/test", json={"phone": KIM})
         self.assertEqual(refused.status_code, 424)
-        self.assertIn("textbelt.com/whitelist", refused.json()["detail"])
+        # It names this server's own domain, the app download links' and the app stores'.
+        domains = "narahem.example.invalid, apps.example.invalid, apps.apple.com, play.google.com"
+        self.assertIn("textbelt.com/whitelist, listing " + domains + ".", refused.json()["detail"])
+        listed = self.client.get("/api/texting").json()["link_domains"]
+        self.assertEqual(", ".join(listed), domains)
+        self.assertEqual(
+            texting.link_domains("https://home.example.invalid", ("https://apps.apple.com/x",)),
+            ["home.example.invalid", "apps.apple.com", "play.google.com"],
+        )
 
     def test_phone_numbers_are_stored_in_one_form(self):
         for given in ("4155550123", "14155550123", "+1 (415) 555-0123", "415.555.0123"):

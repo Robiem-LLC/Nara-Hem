@@ -519,6 +519,14 @@ function textingCard(texting, user) {
     document.getElementById('remove-texting').hidden = false;
   }
   document.getElementById('check-texting').disabled = !texting.source;
+  // Name this server's own domains for Textbelt's link approval.
+  const domains = texting.link_domains ?? [];
+  if (domains.length) {
+    document.getElementById('texting-domains').textContent =
+      domains.length > 1
+        ? `${domains.slice(0, -1).join(', ')} and ${domains[domains.length - 1]}`
+        : domains[0];
+  }
   const refresh = async (message) => {
     textingOn = (await api('/api/setup')).texting;
     await dashboard(user);

@@ -18,6 +18,7 @@ from narahem import texting
 from narahem.app import (
     DUMMY_HASH,
     HASHER,
+    app_links,
     client_ip,
     digest,
     email_address,
@@ -206,6 +207,8 @@ def install(
             "quota": settings.sms_quota if checked else None,
             "error": settings.sms_error if checked else None,
             "checked_at": settings.sms_checked if checked else None,
+            # What to list when asking Textbelt to allow links.
+            "link_domains": texting.link_domains(public_url, app_links()),
         }
 
     @app.get("/api/texting")
