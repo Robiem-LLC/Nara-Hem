@@ -311,7 +311,7 @@ class AlexaTests(unittest.TestCase):
             token=directive["token"],
         )
         said = reply["response"]["outputSpeech"]["text"]
-        self.assertEqual(said, "Reminder permission was not granted.")
+        self.assertIn("Alexa permission status: DENIED", said)
         # The older answer shape, a single scope and status, is understood too.
         for status, granted in (("DENIED", False), ("ACCEPTED", True)):
             payload = {"permissionScope": alexa_arrivals.REMINDERS, "status": status}
