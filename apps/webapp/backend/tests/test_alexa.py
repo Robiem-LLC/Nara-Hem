@@ -303,12 +303,19 @@ class AlexaTests(unittest.TestCase):
             access,
             kind="Connections.Response",
             name="AskFor",
-            payload={"status": "DENIED"},
+            payload={
+                "permissionScopes": [
+                    {"permissionScope": alexa_arrivals.REMINDERS, "status": "DENIED"}
+                ]
+            },
             token=directive["token"],
         )
-        self.assertIn(
-            "only let you know if I may set reminders", reply["response"]["outputSpeech"]["text"]
-        )
+        said = reply["response"]["outputSpeech"]["text"]
+        self.assertEqual(said, "Reminder permission was not granted.")
+        # The older answer shape, a single scope and status, is understood too.
+        for status, granted in (("DENIED", False), ("ACCEPTED", True)):
+            payload = {"permissionScope": alexa_arrivals.REMINDERS, "status": status}
+            self.assertEqual(alexa_arrivals.reminders_accepted(payload), granted)
 
         # Already there, or not there to leave: said at once, nothing to wait for.
         said, _ = self.watch(access, "NotifyArrivalIntent", "Maya", "Laurelhurst Park")

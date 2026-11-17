@@ -44,6 +44,20 @@ def granted(alexa):
     return (scopes.get(REMINDERS) or {}).get("status") == "GRANTED"
 
 
+def reminders_accepted(payload):
+    """Returns True if the answer to the permission question allows reminders. Amazon answers a
+    version 2 request with a list of scopes, each with its own status, and a version 1 request
+    with a single scope and status.
+    """
+    scopes = payload.get("permissionScopes") or [payload]
+    return any(
+        isinstance(scope, dict)
+        and scope.get("permissionScope", REMINDERS) == REMINDERS
+        and scope.get("status") == "ACCEPTED"
+        for scope in scopes
+    )
+
+
 def endpoint(alexa):
     """Returns the request's Alexa API address if it is one of Amazon's, else None."""
     value = system(alexa).get("apiEndpoint")

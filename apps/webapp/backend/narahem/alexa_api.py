@@ -570,40 +570,23 @@ def install(
         db.commit()
         return say(alexa_arrivals.promise(name, place["name"], event))
 
-
     def permission_answer(db, alexa, link):
         """Carries on after Alexa asked by voice for permission to set reminders."""
         request = alexa.get("request") or {}
-
         if request.get("name") != "AskFor":
             return say("Okay.")
-
-        payload = request.get("payload") or {}
-        scopes = payload.get("permissionScopes") or []
-
-        accepted = any(
-            scope.get("permissionScope") == alexa_arrivals.REMINDERS
-            and scope.get("status") == "ACCEPTED"
-            for scope in scopes
-        )
-
-        if not accepted:
+        if not alexa_arrivals.reminders_accepted(request.get("payload") or {}):
             return say("Reminder permission was not granted.")
-
         try:
             asked = json.loads(request.get("token") or "")
         except ValueError:
             asked = {}
-
         member = next((m for m in household(db) if m[0] == asked.get("m")), None)
         place = next((p for p in server_places(db) if p["id"] == asked.get("p")), None)
-
         if not member or not place:
             return say("Please ask me again.")
-
         event = "leave" if asked.get("e") == "leave" else "arrive"
         return notify_when(db, alexa, link, member, place, event)
-
 
     def wake_up(db, alexa, link):
         """Amazon woke the skill because a watched member arrived or left: sets the spoken
