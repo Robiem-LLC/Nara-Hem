@@ -45,11 +45,12 @@ def granted(alexa):
 
 
 def reminders_accepted(payload):
-    """Returns True if the answer to the permission question allows reminders. Amazon answers a
-    version 2 request with a list of scopes, each with its own status, and a version 1 request
-    with a single scope and status.
-    """
-    scopes = payload.get("permissionScopes") or [payload]
+    """Check whether Alexa accepted reminders permission."""
+    scopes = payload.get("permissionScopes")
+    if isinstance(scopes, dict):
+        scopes = [scopes]
+    elif not isinstance(scopes, list):
+        scopes = [payload]
     return any(
         isinstance(scope, dict)
         and scope.get("permissionScope", REMINDERS) == REMINDERS
