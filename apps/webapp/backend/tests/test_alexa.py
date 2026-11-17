@@ -316,7 +316,25 @@ class AlexaTests(unittest.TestCase):
         for status, granted in (("DENIED", False), ("ACCEPTED", True)):
             payload = {"permissionScope": alexa_arrivals.REMINDERS, "status": status}
             self.assertEqual(alexa_arrivals.reminders_accepted(payload), granted)
+        # Also accept a single nested permission scope object.
+        for status, expected in (("ACCEPTED", True), ("DENIED", False)):
+            payload = {
+                "permissionScopes": {
+                    "permissionScope": alexa_arrivals.REMINDERS,
+                    "status": status,
+                }
+            }
+            self.assertEqual(
+                alexa_arrivals.reminders_accepted(payload),
+                expected,
+            )
 
+        # Missing approval must never count as permission.
+        self.assertFalse(
+            alexa_arrivals.reminders_accepted(
+                {"permissionScopes": {"permissionScope": alexa_arrivals.REMINDERS}}
+            )
+        )
         # Already there, or not there to leave: said at once, nothing to wait for.
         said, _ = self.watch(access, "NotifyArrivalIntent", "Maya", "Laurelhurst Park")
         self.assertEqual(said, "Maya is already at Laurelhurst Park.")
