@@ -575,8 +575,24 @@ def install(
         request = alexa.get("request") or {}
         if request.get("name") != "AskFor":
             return say("Okay.")
-        if not alexa_arrivals.reminders_accepted(request.get("payload") or {}):
-            return say("Reminder permission was not granted.")
+        payload = request.get("payload") or {}
+        if not alexa_arrivals.reminders_accepted(payload):
+            scopes = payload.get("permissionScopes")
+            if isinstance(scopes, list):
+                statuses = [
+                    scope.get("status", "MISSING")
+                    for scope in scopes
+                    if isinstance(scope, dict)
+                ]
+            else:
+                statuses = [payload.get("status", "MISSING")]
+            code = (request.get("status") or {}).get("code", "UNKNOWN")
+            return say(
+                "Alexa permission status: "
+                + ", ".join(str(status) for status in statuses)
+                + ". Response code: "
+                + str(code)
+            )
         try:
             asked = json.loads(request.get("token") or "")
         except ValueError:
