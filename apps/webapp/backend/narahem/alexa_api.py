@@ -538,7 +538,10 @@ def install(
             return say(f"I don't know where {name} is right now.")
         if event == "leave" and not inside(place, payload):
             return say(f"{name} isn't {where} right now.")
-        if not alexa_arrivals.granted(alexa):
+        permission = alexa_arrivals.granted(alexa)
+        if permission is None:
+            return say("I couldn't verify reminders permission. Please try again.")
+        if not permission:
             asked = {"m": account_id, "p": place["id"], "e": event}
             return alexa_arrivals.ask_permission(json.dumps(asked))
         address = alexa_arrivals.endpoint(alexa)
