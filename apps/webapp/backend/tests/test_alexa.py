@@ -285,7 +285,14 @@ class AlexaTests(unittest.TestCase):
             access,
             kind="Connections.Response",
             name="AskFor",
-            payload={"status": "ACCEPTED"},
+            payload={
+                "permissionScopes": [
+                    {
+                        "permissionScope": alexa_arrivals.REMINDERS,
+                        "status": "ACCEPTED",
+                    }
+                ]
+            },
             token=directive["token"],
         )
         said = reply["response"]["outputSpeech"]["text"]
