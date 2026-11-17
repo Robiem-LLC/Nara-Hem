@@ -573,10 +573,21 @@ def install(
     def permission_answer(db, alexa, link):
         """Carries on after Alexa asked by voice for permission to set reminders."""
         request = alexa.get("request") or {}
+        
         if request.get("name") != "AskFor":
             return say("Okay.")
-        if (request.get("payload") or {}).get("status") != "ACCEPTED":
-            return say("Okay. I can only let you know if I may set reminders.")
+        
+        payload = request.get("payload") or {}
+        scopes = payload.get("permissionScopes") or []
+        
+        accepted = any(
+            scope.get("permissionScope") == alexa_arrivals.REMINDERS
+            and scope.get("status") == "ACCEPTED"
+            for scope in scopes
+        )
+        
+        if not accepted:
+            return say("Reminder permission was not granted.")
         try:
             asked = json.loads(request.get("token") or "")
         except ValueError:
