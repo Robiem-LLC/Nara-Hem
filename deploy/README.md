@@ -14,7 +14,8 @@ If something goes wrong, see [troubleshooting](../docs/troubleshooting.md).
 - **Optional: a Google Maps key** for Google maps and address search; without one, maps use
   OpenStreetMap. See [Google Maps](../docs/google-maps.md).
 - **Optional: a [Textbelt](https://textbelt.com) key** to send invitations and codes by text
-  message as well as email.
+  message as well as email. These requests for whitelisting are taking inordinately long, so i am
+  trying to look into other options. Be it with them or a different provider.
 
 ## Install with Docker
 
