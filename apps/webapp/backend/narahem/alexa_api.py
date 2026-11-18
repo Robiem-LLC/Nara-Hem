@@ -164,7 +164,6 @@ def install(
     """Registers the Alexa routes. Only called when the server allows Alexa."""
     prototype = os.environ.get("NARAHEM_ALEXA_REMINDER_PROTOTYPE") == "1"
     test_reminders = {}
-
     def status(db):
         """Returns everything the Admin settings card shows."""
         links = db.scalars(
@@ -562,7 +561,6 @@ def install(
         if prototype:
             if watches:
                 return say("There is already a location watch pending.")
-        
             if not confirmed:
                 return say(
                     "I'll set a test reminder for one hour from now, "
@@ -586,17 +584,14 @@ def install(
             return say("You're already waiting on too many people. Try again later.")
         now = time.time()
         watch_id = secrets.token_hex(16)
-        
         if prototype:
             alert_token = alexa_arrivals.test_reminder(
                 alexa,
                 "Your location alert test expired.",
                 3600,
             )
-        
             if not alert_token:
                 return say("I couldn't create the test reminder.")
-        
             test_reminders[watch_id] = alert_token
         db.add(
             AlexaWatch(
