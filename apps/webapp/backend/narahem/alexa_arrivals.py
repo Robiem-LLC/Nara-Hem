@@ -200,7 +200,7 @@ def create_reminder(alexa):
     return token if isinstance(token, str) and token else None
 
 
-def finish_reminder(alexa, alert_token, event, cancel=False):
+def finish_reminder(alexa, alert_token, event, cancel=False, label=None):
     """Update or delete an active placeholder; reconcile retries with Amazon first."""
     result, data = reminder_request(alexa, "GET", alert_token)
     if result != "ok":
