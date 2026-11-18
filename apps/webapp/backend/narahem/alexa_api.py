@@ -162,6 +162,8 @@ def install(
     trip_processor,
 ):
     """Registers the Alexa routes. Only called when the server allows Alexa."""
+    prototype = os.environ.get("NARAHEM_ALEXA_REMINDER_PROTOTYPE") == "1"
+    test_reminders = {}
 
     def status(db):
         """Returns everything the Admin settings card shows."""
@@ -501,12 +503,20 @@ def install(
         """Answers a where-is question, rings a phone or starts an arrival watch."""
         if pending.get("ask") == "ring":
             return say(ring(db, member, link, background_tasks))
-        if pending.get("ask") == "notify":
+        if pending.get("ask") in ("notify", "notify_test"):
             place = next((p for p in server_places(db) if p["id"] == pending.get("place")), None)
             if not place:
                 return say("That place isn't saved any more.")
             event = "leave" if pending.get("event") == "leave" else "arrive"
-            return notify_when(db, alexa, link, member, place, event)
+            return notify_when(
+                db,
+                alexa,
+                link,
+                member,
+                place,
+                event,
+                confirmed=pending.get("ask") == "notify_test",
+            )
         return say(where_is(db, member, alexa))
 
     def place_named(db, heard):
@@ -525,7 +535,7 @@ def install(
             household_alerts.match(float(data["lat"]), float(data["lon"]), [place], accuracy)
         )
 
-    def notify_when(db, alexa, link, member, place, event):
+    def notify_when(db, alexa, link, member, place, event, confirmed=False):
         """Starts a watch for a member reaching or leaving a place, asking for reminders
         permission first.
         """
@@ -549,15 +559,48 @@ def install(
         if not address or not user or len(user) > 300:
             return say("I can't set that up from this device.")
         watches = db.scalars(select(AlexaWatch).where(AlexaWatch.link_id == link.id)).all()
+        if prototype:
+            if watches:
+                return say("There is already a location watch pending.")
+        
+            if not confirmed:
+                return say(
+                    "I'll set a test reminder for one hour from now, "
+                    "and move it forward when the location event happens. "
+                    "If it doesn't happen, the reminder will say the test expired. "
+                    "Is that okay?",
+                    end=False,
+                    attributes={
+                        "pending": {
+                            "ask": "notify_test",
+                            "account": account_id,
+                            "place": place["id"],
+                            "event": event,
+                        }
+                    },
+                )
         for watch in watches:
             if (watch.member_id, watch.place_id, watch.event) == (account_id, place["id"], event):
                 db.delete(watch)
         if len(watches) >= alexa_arrivals.MAX_WATCHES:
             return say("You're already waiting on too many people. Try again later.")
         now = time.time()
+        watch_id = secrets.token_hex(16)
+        
+        if prototype:
+            alert_token = alexa_arrivals.test_reminder(
+                alexa,
+                "Your location alert test expired.",
+                3600,
+            )
+        
+            if not alert_token:
+                return say("I couldn't create the test reminder.")
+        
+            test_reminders[watch_id] = alert_token
         db.add(
             AlexaWatch(
-                id=secrets.token_hex(16),
+                id=watch_id,
                 link_id=link.id,
                 member_id=account_id,
                 place_id=place["id"],
@@ -566,11 +609,16 @@ def install(
                 alexa_user=user,
                 api_endpoint=address,
                 created=now,
-                expires=now + alexa_arrivals.WATCH_SECONDS,
+                expires=now + (3600 if prototype else alexa_arrivals.WATCH_SECONDS),
                 attempts=0,
             )
         )
         db.commit()
+        if prototype:
+            return say(
+                "Okay. Your one hour test reminder is set. "
+                "I'll reschedule it when the location event happens."
+            )
         return say(alexa_arrivals.promise(name, place["name"], event))
 
     def permission_answer(db, alexa, link):
@@ -605,24 +653,52 @@ def install(
         if not member or not place:
             return say("Please ask me again.")
         event = "leave" if asked.get("e") == "leave" else "arrive"
+        if prototype:
+            return say("Permission granted. Please ask again to start the test.")
         return notify_when(db, alexa, link, member, place, event)
 
+
     def wake_up(db, alexa, link):
-        """Amazon woke the skill because a watched member arrived or left: sets the spoken
-        reminder.
-        """
+        """Handles an Alexa wake-up when a watched location event occurs."""
         message = (alexa.get("request") or {}).get("message") or {}
         watch = db.get(AlexaWatch, str(message.get("watch") or ""))
         user = (alexa_arrivals.system(alexa).get("user") or {}).get("userId")
+
         if watch and watch.link_id == link.id and watch.alexa_user == user and watch.happened:
+            if prototype:
+                alert_token = test_reminders.pop(watch.id, None)
+
+                if alert_token:
+                    result = alexa_arrivals.test_reminder(
+                        alexa,
+                        "Your location alert test succeeded.",
+                        30,
+                        alert_token=alert_token,
+                    )
+                    print(
+                        "Alexa test reminder rescheduled:",
+                        bool(result),
+                        flush=True,
+                    )
+                else:
+                    print("Alexa test reminder token missing", flush=True)
+
+                db.delete(watch)
+                db.commit()
+                return {"version": "1.0", "response": {}}
+
             name = member_name(db, watch.member_id)
             text = alexa_arrivals.announcement(name, watch.place_name, watch.event)
+
             if alexa_arrivals.set_reminder(alexa, text):
                 db.delete(watch)
             else:
-                watch.notified = None  # let the next round ask the relay again
+                watch.notified = None
+
             db.commit()
+
         return {"version": "1.0", "response": {}}
+
 
     def watch_fix(db, device, lat, lon, accuracy):
         """Marks this member's watches as happened when a new location is inside the place (an
