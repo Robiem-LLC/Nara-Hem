@@ -423,7 +423,9 @@ class AlexaTests(unittest.TestCase):
             "request",
             return_value=httpx.Response(200, json={"status": "COMPLETED"}),
         ) as http:
-            self.assertEqual(alexa_arrivals.finish_reminder(request, "alert.test", "arrive"), "gone")
+                        self.assertEqual(
+                alexa_arrivals.finish_reminder(request, "alert.test", "arrive"), "gone"
+            )
             self.assertEqual(http.call_count, 1)
         for status, expected in [(404, "gone"), (429, "retry"), (503, "retry"), (403, "failed")]:
             with patch.object(alexa_arrivals.httpx, "request", return_value=httpx.Response(status)):
