@@ -579,9 +579,7 @@ def install(
         if not confirmed:
             action = "leaves" if event == "leave" else "arrives at"
             return say(
-                f"I'll watch for when {name} {action} {place['name']} for 24 hours. "
-                "Alexa will announce the name and place. "
-                "If it expires, you may receive an expiration reminder ten minutes later. "
+                f"I'll watch for when {name} {action} {place['name']} for 24 hours and notify you if it expires. "
                 "Is that okay?",
                 end=False,
                 attributes={
