@@ -224,6 +224,7 @@ def retry_delay(attempts):
     """Bound exponential backoff, including failed relay requests."""
     return min(120, 10 * 2 ** min(max(attempts - 1, 0), 4))
 
+
 def wake(relay, watch):
     """Classify the relay result without exposing user identifiers."""
     try:
