@@ -167,6 +167,16 @@ def set_reminder(alexa, text):
         )
     except httpx.HTTPError:
         return False
+    if reply.status_code not in (200, 201):
+        try:
+            code = reply.json().get("code", "UNKNOWN")
+        except ValueError:
+            code = "UNKNOWN"
+        print(
+            f"Alexa reminder failed: HTTP {reply.status_code}, "
+            f"code={code}",
+            flush=True,
+        )
     return reply.status_code in (200, 201)
 
 
