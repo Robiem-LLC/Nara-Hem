@@ -580,6 +580,7 @@ def install(
             action = "leaves" if event == "leave" else "arrives at"
             return say(
                 f"I'll watch for when {name} {action} {place['name']} for 24 hours. "
+                "Alexa will announce the name and place. "
                 "If it expires, you may receive an expiration reminder ten minutes later. "
                 "Is that okay?",
                 end=False,
@@ -618,10 +619,7 @@ def install(
             db.rollback()
             alexa_arrivals.finish_reminder(alexa, alert_token, event, cancel=True)
             return say("I couldn't save the location alert. Check your Alexa reminders.")
-        return say(
-            alexa_arrivals.promise(name, place["name"], event)
-            + " Your 24-hour location watch is set."
-        )
+        return say("Okay, your 24-hour location watch is set.")
 
     def permission_answer(db, alexa, link):
         """Carries on after Alexa asked by voice for permission to set reminders."""
@@ -686,8 +684,14 @@ def install(
             p["id"] == watch.place_id for p in server_places(db)
         ):
             cancel_watch(db, watch)
+        name = member_name(db, watch.member_id)
+        label = alexa_arrivals.announcement(name, watch.place_name, watch.event)
         result = alexa_arrivals.finish_reminder(
-            alexa, watch.alert_token, watch.event, cancel=watch.cancel_requested
+            alexa,
+            watch.alert_token,
+            watch.event,
+            cancel=watch.cancel_requested,
+            label=label,
         )
         if result in ("ok", "gone"):
             db.delete(watch)
