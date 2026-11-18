@@ -10,8 +10,8 @@ Maya has arrived home." Amazon hears that sentence; nothing else about the house
 
 This module holds the pieces that talk to Amazon and the relay; alexa_api.py decides when.
 """
-
 import datetime
+from urllib.parse import quote
 
 import httpx
 
@@ -36,7 +36,6 @@ REMINDER_DELAY = 10
 def system(alexa):
     """Returns the context.System part of an Alexa request."""
     return (alexa.get("context") or {}).get("System") or {}
-
 
 
 def granted(alexa):
@@ -140,12 +139,12 @@ def announcement(name, place, event):
     return f"From Nara Hem: {name} has arrived {'home' if is_home(place) else 'at ' + place}."
 
 
-def reminder(text, locale):
+def reminder(text, locale, delay=REMINDER_DELAY):
     """Returns a Reminders API body for a reminder a few seconds from now."""
     now = datetime.datetime.now(datetime.UTC).replace(microsecond=0)
     return {
         "requestTime": now.strftime("%Y-%m-%dT%H:%M:%S.000"),
-        "trigger": {"type": "SCHEDULED_RELATIVE", "offsetInSeconds": REMINDER_DELAY},
+        "trigger": {"type": "SCHEDULED_RELATIVE", "offsetInSeconds": delay},
         "alertInfo": {"spokenInfo": {"content": [{"locale": locale, "text": text}]}},
         "pushNotification": {"status": "ENABLED"},
     }
@@ -194,3 +193,48 @@ def wake(relay, watch):
     except httpx.HTTPError:
         return False
     return reply.status_code == 202
+
+
+def test_reminder(alexa, text, delay, alert_token=None):
+    """Create or reschedule a test reminder."""
+    address = endpoint(alexa)
+    token = system(alexa).get("apiAccessToken")
+    if not address or not token:
+        return None
+    locale = (alexa.get("request") or {}).get("locale") or "en-US"
+    url = address + "/v1/alerts/reminders"
+    method = "POST"
+    if alert_token:
+        url += "/" + quote(alert_token, safe="")
+        method = "PUT"
+    try:
+        reply = httpx.request(
+            method,
+            url,
+            json=reminder(text, locale, delay),
+            headers={"Authorization": "Bearer " + token},
+            timeout=3,
+            follow_redirects=False,
+        )
+        print(
+            f"Alexa test reminder {method}: HTTP {reply.status_code}",
+            flush=True,
+        )
+        if reply.status_code not in (200, 201):
+            print(
+                "Alexa test reminder error:",
+                reply.json().get("code", "UNKNOWN"),
+                flush=True,
+            )
+            return None
+        if alert_token:
+            return alert_token
+        return reply.json().get("alertToken")
+    except (httpx.HTTPError, ValueError) as error:
+        print(
+            "Alexa test reminder exception:",
+            type(error).__name__,
+            flush=True,
+        )
+        return None
+
