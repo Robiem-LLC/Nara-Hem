@@ -580,10 +580,8 @@ def install(
             action = "leaves" if event == "leave" else "arrives at"
             return say(
                 f"I'll watch for when {name} {action} {place['name']} for 24 hours. "
-                "I'll create a reminder for 24 hours and ten minutes from now, "
-                "move it earlier if the event happens, or try to cancel it when the watch "
-                "expires. If cancellation fails, it will say your location alert expired. "
-                "The spoken alert won't include names or places. Is that okay?",
+                "If it expires, you may receive an expiration reminder ten minutes later. "
+                "Is that okay?",
                 end=False,
                 attributes={
                     "pending": {
@@ -622,8 +620,7 @@ def install(
             return say("I couldn't save the location alert. Check your Alexa reminders.")
         return say(
             alexa_arrivals.promise(name, place["name"], event)
-            + " Your 24-hour location watch is set. The fallback reminder is in 24 hours "
-            "and ten minutes."
+            + " Your 24-hour location watch is set."
         )
 
     def permission_answer(db, alexa, link):
