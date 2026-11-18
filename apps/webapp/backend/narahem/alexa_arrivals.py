@@ -216,7 +216,7 @@ def finish_reminder(alexa, alert_token, event, cancel=False):
         return reminder_request(alexa, "DELETE", alert_token)[0]
     locale = current.get("locale") or (alexa.get("request") or {}).get("locale") or "en-US"
     return reminder_request(
-        alexa, "PUT", alert_token, reminder(DELIVERY[event], locale, REMINDER_DELAY)
+        alexa, "PUT", alert_token, reminder(label or DELIVERY[event], locale, REMINDER_DELAY)
     )[0]
 
 
