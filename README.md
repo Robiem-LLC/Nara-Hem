@@ -20,21 +20,20 @@ browsers only get household data once they've been approved.
 - **Apps:** sign in with your server's address and your account; your server's invitation email
   has the download links.
 - **Alexa:** [docs/alexa.md](docs/alexa.md).
- 
+
 ## Roadmap
 
 - Looking for a replacement for textbelt. They are proving to not be as responsive as they
-  say. If keeping them as the sms provider I am *trying* to get automatic whitelisting for
+  say. If keeping them as the sms provider I am _trying_ to get automatic whitelisting for
   accounts created through a Nära Hem link.
 - I would like to get ALL of the cloudflare workers off the cloud with out exposing keys. So
-  if I were to kick it these features don't just die...  I did try to leave clear adjacent
+  if I were to kick it these features don't just die... I did try to leave clear adjacent
   instruction on replacating then and the code with it, because it looks like even amazon
   leaves me stuck.
-- Make the individual devices be able to opt out of alexa alerts. Its the biggest privacy weak 
+- Make the individual devices be able to opt out of alexa alerts. Its the biggest privacy weak
   point outside of user error, and should be allowed to be opted out of.
-- Adding some kind of trackers. *special request*
+- Adding some kind of trackers. _special request_
 - If requested adding google voice etc.
-
 
 ## Security
 
