@@ -223,14 +223,14 @@ class AlexaTests(unittest.TestCase):
         self.assertIn("link Nara Hem", said)
         self.assertEqual(response["response"]["card"], {"type": "LinkAccount"})
 
-    def tell(self, link_token, kind="IntentRequest", granted=True, **request):
+    def tell(self, link_token, kind="IntentRequest", granted=True, attributes=None, **request):
         """Sends an Alexa request for the arrival and departure watches and returns the reply."""
         permissions = (
             {"scopes": {alexa_arrivals.REMINDERS: {"status": "GRANTED"}}} if granted else {}
         )
         body = {
             "version": "1.0",
-            "session": {"attributes": {}},
+            "session": {"attributes": attributes or {}},
             "context": {
                 "System": {
                     "application": {"applicationId": STORE_SKILL},
@@ -266,147 +266,172 @@ class AlexaTests(unittest.TestCase):
                 for w in db.scalars(select(AlexaWatch))
             ]
 
+    def confirm_watch(self, access, intent="NotifyArrivalIntent", place=None, token="alert.test"):
+        said, reply = self.watch(access, intent, "Maya", place)
+        self.assertIn("Is that okay?", said)
+        self.assertFalse(reply["response"]["shouldEndSession"])
+        with patch.object(alexa_arrivals, "create_reminder", return_value=token) as create:
+            reply = self.tell(
+                access,
+                attributes=reply["sessionAttributes"],
+                intent={"name": "AMAZON.YesIntent"},
+            )
+        create.assert_called_once()
+        self.assertIn("24-hour location watch", reply["response"]["outputSpeech"]["text"])
+
     def test_alexa_lets_you_know_when_someone_arrives_or_leaves(self):
         family = self.move_in()
         access = self.link()["access_token"]
         maya = family.phones["Maya"]
-
-        # The first time, Alexa asks by voice for permission to set reminders.
-        said, reply = self.watch(access, "NotifyArrivalIntent", "Maya", granted=False)
+        _, reply = self.watch(access, "NotifyArrivalIntent", "Maya", granted=False)
         directive = reply["response"]["directives"][0]
-        self.assertEqual(
-            (directive["type"], directive["name"]), ("Connections.SendRequest", "AskFor")
-        )
-        scope = directive["payload"]["permissionScopes"][0]["permissionScope"]
-        self.assertEqual(scope, alexa_arrivals.REMINDERS)
+        self.assertEqual(directive["name"], "AskFor")
         self.assertEqual(self.watches(), [])
-        # "Yes" comes back as a Connections.Response carrying the request.
         reply = self.tell(
             access,
             kind="Connections.Response",
             name="AskFor",
             payload={
                 "permissionScopes": [
-                    {
-                        "permissionScope": alexa_arrivals.REMINDERS,
-                        "status": "ACCEPTED",
-                    }
+                    {"permissionScope": alexa_arrivals.REMINDERS, "status": "ACCEPTED"}
                 ]
             },
             token=directive["token"],
         )
-        said = reply["response"]["outputSpeech"]["text"]
-        self.assertEqual(said, "Okay, I'll let you know when Maya gets home.")
-        self.assertEqual(self.watches(), [("Home", "arrive", False)])
-        # "No" sets nothing.
-        reply = self.tell(
-            access,
-            kind="Connections.Response",
-            name="AskFor",
-            payload={
-                "permissionScopes": [
-                    {"permissionScope": alexa_arrivals.REMINDERS, "status": "DENIED"}
-                ]
-            },
-            token=directive["token"],
-        )
-        said = reply["response"]["outputSpeech"]["text"]
-        self.assertEqual(said, "Reminder permission was not granted.")
-        # The older answer shape, a single scope and status, is understood too.
-        for status, granted in (("DENIED", False), ("ACCEPTED", True)):
-            payload = {"permissionScope": alexa_arrivals.REMINDERS, "status": status}
-            self.assertEqual(alexa_arrivals.reminders_accepted(payload), granted)
-
-        # Already there, or not there to leave: said at once, nothing to wait for.
+        self.assertIn("Permission granted", reply["response"]["outputSpeech"]["text"])
+        self.assertEqual(self.watches(), [])
+        # Declining the reminder must not create a watch or contact Amazon.
+        _, consent = self.watch(access, "NotifyArrivalIntent", "Maya")
+        with patch.object(alexa_arrivals, "create_reminder") as create:
+            self.tell(
+                access, attributes=consent["sessionAttributes"], intent={"name": "AMAZON.NoIntent"}
+            )
+            create.assert_not_called()
+        self.assertEqual(self.watches(), [])
+        self.confirm_watch(access, token="alert.arrive")
+        said, _ = self.watch(access, "NotifyArrivalIntent", "Maya")
+        self.assertIn("already have", said)
         said, _ = self.watch(access, "NotifyArrivalIntent", "Maya", "Laurelhurst Park")
         self.assertEqual(said, "Maya is already at Laurelhurst Park.")
         said, _ = self.watch(access, "NotifyLeaveIntent", "Maya", "home")
         self.assertEqual(said, "Maya isn't home right now.")
         said, _ = self.watch(access, "NotifyArrivalIntent", "Maya", "Mars")
-        self.assertEqual(said, "You don't have a saved place called Mars.")
-        said, _ = self.watch(access, "NotifyLeaveIntent", "Maya", "Laurelhurst Park")
-        self.assertEqual(said, "Okay, I'll let you know when Maya leaves Laurelhurst Park.")
-        self.assertEqual(
-            sorted(self.watches()),
-            [("Home", "arrive", False), ("Laurelhurst Park", "leave", False)],
-        )
-
-        # Maya leaves the park: the departure happens; the arrival waits.
+        self.assertIn("don't have a saved place", said)
+        self.confirm_watch(access, "NotifyLeaveIntent", "Laurelhurst Park", "alert.leave")
+        with Session(self.app.state.engine) as db:
+            self.assertEqual(
+                {w.alert_token for w in db.scalars(select(AlexaWatch))},
+                {"alert.arrive", "alert.leave"},
+            )
         park = demo_family.PLACES["Laurelhurst Park"]
         maya.location(park[0] + 0.01, park[1])
-        self.assertEqual(
-            sorted(self.watches()),
-            [("Home", "arrive", False), ("Laurelhurst Park", "leave", True)],
-        )
-        # She gets home: the arrival happens too.
         maya.location(*demo_family.PLACES["Home"])
-        self.assertEqual(
-            sorted(self.watches()),
-            [("Home", "arrive", True), ("Laurelhurst Park", "leave", True)],
-        )
-
-        # The background job asks the relay to wake the skill for each.
-        woken = []
-
-        def relay(url, json=None, **kwargs):
-            woken.append((url, json))
-            return type("Reply", (), {"status_code": 202})()
-
-        with patch.object(alexa_arrivals.httpx, "post", relay):
+        with patch.object(alexa_arrivals, "wake", return_value="ok") as wake:
             self.app.state.deliveries()
-        self.assertEqual(len(woken), 2)
-        self.assertEqual({u for u, _ in woken}, {RELAY + "/v1/notify"})
-        sent = {w["user"] for _, w in woken}, {w["endpoint"] for _, w in woken}
-        self.assertEqual(sent, ({"amzn1.ask.account.synthetic"}, {"https://api.amazonalexa.com"}))
-
-        # Amazon wakes the skill: it sets a reminder that speaks a few seconds later.
-        reminders = []
-
-        def amazon_reminders(url, json=None, headers=None, **kwargs):
-            reminders.append((url, json, headers))
-            return type("Reply", (), {"status_code": 201})()
-
-        # The second wake-up comes after the link's access token has expired: Amazon may send the
-        # token it last had, and that still counts for a wake-up (but not for questions).
-        for number, (_, wake) in enumerate(woken):
-            if number:
-                with Session(self.app.state.engine) as db:
-                    db.execute(update(AlexaLink).values(access_expires=time.time() - 60))
-                    db.commit()
-            with patch.object(alexa_arrivals.httpx, "post", amazon_reminders):
-                reply = self.tell(
-                    access, kind="Messaging.MessageReceived", message={"watch": wake["watch"]}
-                )
-            self.assertEqual(reply["response"], {})
-        spoken = sorted(r[1]["alertInfo"]["spokenInfo"]["content"][0]["text"] for r in reminders)
-        self.assertEqual(
-            spoken,
-            [
-                "From Nara Hem: Maya has arrived home.",
-                "From Nara Hem: Maya has left Laurelhurst Park.",
-            ],
-        )
-        url, body, headers = reminders[0]
-        self.assertEqual(url, "https://api.amazonalexa.com/v1/alerts/reminders")
-        self.assertEqual(headers["Authorization"], "Bearer synthetic-alexa-api-token")
-        self.assertEqual(body["trigger"]["type"], "SCHEDULED_RELATIVE")
-        self.assertEqual(self.watches(), [], "each watch is used once")
-        intent = {"name": "WhereIsIntent", "slots": {"person": {"value": "Maya"}}}
-        expired = self.tell(access, intent=intent)
-        self.assertIn("link", expired["response"]["outputSpeech"]["text"])
-
-        # A wake-up for a watch that isn't there, or another link's, does nothing.
-        with patch.object(alexa_arrivals.httpx, "post", amazon_reminders):
-            reply = self.tell(access, kind="Messaging.MessageReceived", message={"watch": "0" * 32})
-        self.assertEqual((reply["response"], len(reminders)), ({}, 2))
+            self.assertEqual(wake.call_count, 2)
+            self.app.state.deliveries()
+            self.assertEqual(wake.call_count, 2)
+            ids = [call.args[1].id for call in wake.call_args_list]
+        with patch.object(alexa_arrivals, "finish_reminder", return_value="ok") as finish:
+            for index, watch_id in enumerate(ids):
+                if index:
+                    with Session(self.app.state.engine) as db:
+                        db.execute(update(AlexaLink).values(access_expires=time.time() - 60))
+                        db.commit()
+                self.tell(access, kind="Messaging.MessageReceived", message={"watch": watch_id})
+            self.tell(access, kind="Messaging.MessageReceived", message={"watch": ids[0]})
+        self.assertEqual(finish.call_count, 2)
+        self.assertEqual(self.watches(), [])
 
     def test_watches_expire_and_give_up(self):
         self.move_in()
         access = self.link()["access_token"]
-        self.watch(access, "NotifyArrivalIntent", "Maya")
-        with patch("time.time", return_value=time.time() + alexa_arrivals.WATCH_SECONDS + 1):
+        self.confirm_watch(access)
+        with Session(self.app.state.engine) as db:
+            watch = db.scalar(select(AlexaWatch))
+            watch.expires = time.time() - 1
+            watch_id = watch.id
+            db.commit()
+        with patch.object(alexa_arrivals, "wake", return_value="ok"):
             self.app.state.deliveries()
-        self.assertEqual(self.watches(), [], "a day later the watch is gone")
+        with Session(self.app.state.engine) as db:
+            self.assertTrue(db.get(AlexaWatch, watch_id).cancel_requested)
+        with patch.object(alexa_arrivals, "finish_reminder", return_value="ok") as finish:
+            self.tell(access, kind="Messaging.MessageReceived", message={"watch": watch_id})
+            self.assertTrue(finish.call_args.kwargs["cancel"])
+        self.assertEqual(self.watches(), [])
+
+    def test_reminder_retry_is_bounded(self):
+        family = self.move_in()
+        access = self.link()["access_token"]
+        self.confirm_watch(access)
+        family.phones["Maya"].location(*demo_family.PLACES["Home"])
+        with patch.object(alexa_arrivals, "wake", return_value="retry") as wake:
+            self.app.state.deliveries()
+            self.app.state.deliveries()
+            self.assertEqual(wake.call_count, 1)
+        with Session(self.app.state.engine) as db:
+            watch = db.scalar(select(AlexaWatch))
+            self.assertEqual(watch.attempts, 1)
+            self.assertIsNotNone(watch.notified)
+            watch.notified = time.time() - 30
+            db.commit()
+        with patch.object(alexa_arrivals, "wake", return_value="ok") as wake:
+            self.app.state.deliveries()
+            self.assertEqual(wake.call_count, 1)
+
+    def test_reminder_request_lifecycle(self):
+        import httpx
+
+        request = {
+            "context": {
+                "System": {
+                    "apiEndpoint": "https://api.amazonalexa.com",
+                    "apiAccessToken": "synthetic",
+                }
+            }
+        }
+        active = {
+            "status": "ON",
+            "alertInfo": {
+                "spokenInfo": {
+                    "content": [{"locale": "en-US", "text": alexa_arrivals.PLACEHOLDER}]
+                }
+            },
+        }
+        with patch.object(
+            alexa_arrivals.httpx,
+            "request",
+            side_effect=[
+                httpx.Response(201, json={"alertToken": "alert.test"}),
+                httpx.Response(200, json=active),
+                httpx.Response(200, json={}),
+                httpx.Response(200, json=active),
+                httpx.Response(200),
+            ],
+        ) as http:
+            token = alexa_arrivals.create_reminder(request)
+            self.assertEqual(token, "alert.test")
+            self.assertEqual(alexa_arrivals.finish_reminder(request, token, "arrive"), "ok")
+            self.assertEqual(alexa_arrivals.finish_reminder(request, token, "arrive", True), "ok")
+            calls = http.call_args_list
+            self.assertEqual([c.args[0] for c in calls], ["POST", "GET", "PUT", "GET", "DELETE"])
+            self.assertEqual(calls[0].kwargs["json"]["pushNotification"]["status"], "DISABLED")
+            self.assertEqual(calls[2].kwargs["json"]["trigger"]["offsetInSeconds"], 10)
+        with patch.object(
+            alexa_arrivals.httpx,
+            "request",
+            return_value=httpx.Response(200, json={"status": "COMPLETED"}),
+        ) as http:
+            self.assertEqual(
+                alexa_arrivals.finish_reminder(request, "alert.test", "arrive"), "gone"
+            )
+            self.assertEqual(http.call_count, 1)
+        for status, expected in [(404, "gone"), (429, "retry"), (503, "retry"), (403, "failed")]:
+            with patch.object(alexa_arrivals.httpx, "request", return_value=httpx.Response(status)):
+                self.assertEqual(
+                    alexa_arrivals.finish_reminder(request, "alert.test", "arrive"), expected
+                )
 
     def test_only_the_admin_can_link_and_a_new_password_ends_it(self):
         self.move_in()

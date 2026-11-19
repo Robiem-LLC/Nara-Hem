@@ -23,6 +23,7 @@ import json
 import os
 import secrets
 import time
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlencode, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -466,6 +467,18 @@ def install(
             member = next((m for m in members if m[0] == pending.get("account")), None)
             if member:
                 return act(db, pending, member, alexa, link, background_tasks)
+        if name == "AMAZON.CancelIntent" and not pending:
+            user = (alexa_arrivals.system(alexa).get("user") or {}).get("userId")
+            watches = db.scalars(
+                select(AlexaWatch).where(
+                    AlexaWatch.link_id == link.id, AlexaWatch.alexa_user == user
+                )
+            ).all()
+            if watches:
+                for watch in watches:
+                    cancel_watch(db, watch)
+                db.commit()
+                return say("I'll cancel your pending location alerts. Check your Alexa reminders.")
         if name in ("AMAZON.NoIntent", "AMAZON.StopIntent", "AMAZON.CancelIntent"):
             return say("Okay.")
         if name in ("WhereIsIntent", "FindPhoneIntent", "NotifyArrivalIntent", "NotifyLeaveIntent"):
@@ -501,12 +514,20 @@ def install(
         """Answers a where-is question, rings a phone or starts an arrival watch."""
         if pending.get("ask") == "ring":
             return say(ring(db, member, link, background_tasks))
-        if pending.get("ask") == "notify":
+        if pending.get("ask") in ("notify", "notify_confirmed"):
             place = next((p for p in server_places(db) if p["id"] == pending.get("place")), None)
             if not place:
                 return say("That place isn't saved any more.")
             event = "leave" if pending.get("event") == "leave" else "arrive"
-            return notify_when(db, alexa, link, member, place, event)
+            return notify_when(
+                db,
+                alexa,
+                link,
+                member,
+                place,
+                event,
+                confirmed=pending.get("ask") == "notify_confirmed",
+            )
         return say(where_is(db, member, alexa))
 
     def place_named(db, heard):
@@ -525,10 +546,8 @@ def install(
             household_alerts.match(float(data["lat"]), float(data["lon"]), [place], accuracy)
         )
 
-    def notify_when(db, alexa, link, member, place, event):
-        """Starts a watch for a member reaching or leaving a place, asking for reminders
-        permission first.
-        """
+    def notify_when(db, alexa, link, member, place, event, confirmed=False):
+        """Create a persistent watch and its consented reminder in the same voice session."""
         account_id, name = member
         _, payload = latest(db, account_id)
         where = "home" if alexa_arrivals.is_home(place["name"]) else f"at {place['name']}"
@@ -538,20 +557,44 @@ def install(
             return say(f"I don't know where {name} is right now.")
         if event == "leave" and not inside(place, payload):
             return say(f"{name} isn't {where} right now.")
-        if not alexa_arrivals.granted(alexa):
+        permission = alexa_arrivals.granted(alexa)
+        if permission is None:
+            return say("I couldn't verify reminders permission. Please try again.")
+        if not permission:
             asked = {"m": account_id, "p": place["id"], "e": event}
             return alexa_arrivals.ask_permission(json.dumps(asked))
         address = alexa_arrivals.endpoint(alexa)
         user = (alexa_arrivals.system(alexa).get("user") or {}).get("userId") or ""
         if not address or not user or len(user) > 300:
             return say("I can't set that up from this device.")
+        # Serialize registration per linked account, so concurrent voice requests cannot
+        # create duplicate reminders or exceed the limit.
+        db.get(AlexaLink, link.id, with_for_update=True, populate_existing=True)
         watches = db.scalars(select(AlexaWatch).where(AlexaWatch.link_id == link.id)).all()
         for watch in watches:
             if (watch.member_id, watch.place_id, watch.event) == (account_id, place["id"], event):
-                db.delete(watch)
+                return say("You already have that location alert pending.")
         if len(watches) >= alexa_arrivals.MAX_WATCHES:
-            return say("You're already waiting on too many people. Try again later.")
+            return say("You're already waiting on too many location alerts. Try again later.")
+        if not confirmed:
+            action = "leaves" if event == "leave" else "arrives at"
+            return say(
+                f"I'll watch for when {name} {action} {place['name']} for 24 hours and notify you if it expires. "
+                "Is that okay?",
+                end=False,
+                attributes={
+                    "pending": {
+                        "ask": "notify_confirmed",
+                        "account": account_id,
+                        "place": place["id"],
+                        "event": event,
+                    }
+                },
+            )
         now = time.time()
+        alert_token = alexa_arrivals.create_reminder(alexa)
+        if not alert_token:
+            return say("I couldn't confirm the reminder was created. Check your Alexa reminders.")
         db.add(
             AlexaWatch(
                 id=secrets.token_hex(16),
@@ -564,19 +607,41 @@ def install(
                 api_endpoint=address,
                 created=now,
                 expires=now + alexa_arrivals.WATCH_SECONDS,
+                alert_token=alert_token,
                 attempts=0,
             )
         )
-        db.commit()
-        return say(alexa_arrivals.promise(name, place["name"], event))
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            alexa_arrivals.finish_reminder(alexa, alert_token, event, cancel=True)
+            return say("I couldn't save the location alert. Check your Alexa reminders.")
+        return say("Okay, your 24-hour location watch is set.")
 
     def permission_answer(db, alexa, link):
         """Carries on after Alexa asked by voice for permission to set reminders."""
         request = alexa.get("request") or {}
         if request.get("name") != "AskFor":
             return say("Okay.")
-        if not alexa_arrivals.reminders_accepted(request.get("payload") or {}):
-            return say("Reminder permission was not granted.")
+        payload = request.get("payload") or {}
+        if not alexa_arrivals.reminders_accepted(payload):
+            scopes = payload.get("permissionScopes")
+            if isinstance(scopes, list):
+                statuses = [
+                    scope.get("status", "MISSING")
+                    for scope in scopes
+                    if isinstance(scope, dict)
+                ]
+            else:
+                statuses = [payload.get("status", "MISSING")]
+            code = (request.get("status") or {}).get("code", "UNKNOWN")
+            return say(
+                "Alexa permission status: "
+                + ", ".join(str(status) for status in statuses)
+                + ". Response code: "
+                + str(code)
+            )
         try:
             asked = json.loads(request.get("token") or "")
         except ValueError:
@@ -585,24 +650,58 @@ def install(
         place = next((p for p in server_places(db) if p["id"] == asked.get("p")), None)
         if not member or not place:
             return say("Please ask me again.")
-        event = "leave" if asked.get("e") == "leave" else "arrive"
-        return notify_when(db, alexa, link, member, place, event)
+        return say("Permission granted. Please ask again to set your location alert.")
+
+    def cancel_watch(db, watch):
+        """Queue cancellation rather than forgetting a live Amazon reminder."""
+        if not watch.cancel_requested:
+            watch.cancel_requested = True
+            watch.attempts = 0
+            watch.notified = None
+        db.flush()
 
     def wake_up(db, alexa, link):
-        """Amazon woke the skill because a watched member arrived or left: sets the spoken
-        reminder.
-        """
+        """Handle one authorized wake-up; update or delete only its saved reminder."""
         message = (alexa.get("request") or {}).get("message") or {}
-        watch = db.get(AlexaWatch, str(message.get("watch") or ""))
+        watch = db.get(AlexaWatch, str(message.get("watch") or ""), with_for_update=True)
         user = (alexa_arrivals.system(alexa).get("user") or {}).get("userId")
-        if watch and watch.link_id == link.id and watch.alexa_user == user and watch.happened:
-            name = member_name(db, watch.member_id)
-            text = alexa_arrivals.announcement(name, watch.place_name, watch.event)
-            if alexa_arrivals.set_reminder(alexa, text):
+        if not watch or watch.link_id != link.id or watch.alexa_user != user:
+            return {"version": "1.0", "response": {}}
+        now = time.time()
+        if now >= watch.expires:
+            cancel_watch(db, watch)
+        if not watch.cancel_requested and not watch.happened:
+            return {"version": "1.0", "response": {}}
+        if not watch.alert_token:
+            db.delete(watch)
+            db.commit()
+            return {"version": "1.0", "response": {}}
+        # Do not announce after sharing was turned off or the place was removed.
+        sender, _ = latest(db, watch.member_id)
+        if (sender and not sender.sharing) or not any(
+            p["id"] == watch.place_id for p in server_places(db)
+        ):
+            cancel_watch(db, watch)
+        name = member_name(db, watch.member_id)
+        label = alexa_arrivals.announcement(name, watch.place_name, watch.event)
+        result = alexa_arrivals.finish_reminder(
+            alexa,
+            watch.alert_token,
+            watch.event,
+            cancel=watch.cancel_requested,
+            label=label,
+        )
+        if result in ("ok", "gone"):
+            db.delete(watch)
+        elif result == "failed":
+            if watch.cancel_requested:
+                # A permanent failure cannot be fixed by retrying the same operation.
+                print("Alexa reminder cancellation failed; fallback may speak", flush=True)
                 db.delete(watch)
             else:
-                watch.notified = None  # let the next round ask the relay again
-            db.commit()
+                cancel_watch(db, watch)
+        # Transient failures retain the timestamp already saved before the wake-up.
+        db.commit()
         return {"version": "1.0", "response": {}}
 
     def watch_fix(db, device, lat, lon, accuracy):
@@ -615,6 +714,7 @@ def install(
             select(AlexaWatch).where(
                 AlexaWatch.member_id == device.account_id,
                 AlexaWatch.happened.is_(None),
+                AlexaWatch.cancel_requested.is_(False),
                 AlexaWatch.expires > now,
             )
         ).all()
@@ -633,24 +733,68 @@ def install(
                 watch.happened = now
 
     def send_wake_ups(db):
-        """Background job: asks the relay to wake the skill for watches that happened, and clears
-        ones that expired or never got through.
-        """
-        relay, now = store().get("relay"), time.time()
-        for watch in db.scalars(select(AlexaWatch)).all():
-            if watch.happened is None:
-                if watch.expires < now:
-                    db.delete(watch)
+        """Persist a retry lease before contacting the relay; never spin on errors."""
+        relay = store().get("relay")
+        ids = list(db.scalars(select(AlexaWatch.id)))
+        for watch_id in ids:
+            now = time.time()
+            watch = db.get(AlexaWatch, watch_id, with_for_update=True, populate_existing=True)
+            if not watch:
+                db.commit()
                 continue
-            if now - watch.happened > alexa_arrivals.NOTICE_SECONDS or not relay:
+            if not watch.alert_token:
                 db.delete(watch)
+                db.commit()
                 continue
-            if watch.notified and now - watch.notified < alexa_arrivals.RETRY_SECONDS:
+            if now >= watch.expires + alexa_arrivals.CLEANUP_SECONDS:
+                print("Alexa reminder cleanup expired; fallback may speak", flush=True)
+                db.delete(watch)
+                db.commit()
                 continue
+            if now >= watch.expires or (
+                watch.happened and now - watch.happened > alexa_arrivals.NOTICE_SECONDS
+            ):
+                cancel_watch(db, watch)
+            if not watch.cancel_requested and not watch.happened:
+                sender, _ = latest(db, watch.member_id)
+                if (sender and not sender.sharing) or not any(
+                    p["id"] == watch.place_id for p in server_places(db)
+                ):
+                    cancel_watch(db, watch)
+                else:
+                    db.commit()
+                    continue
+            if watch.notified and now - watch.notified < alexa_arrivals.retry_delay(watch.attempts):
+                db.commit()
+                continue
+            if watch.attempts >= alexa_arrivals.MAX_ATTEMPTS:
+                if watch.cancel_requested:
+                    print("Alexa reminder cancellation exhausted retries", flush=True)
+                    db.delete(watch)
+                    db.commit()
+                    continue
+                cancel_watch(db, watch)
+            if not relay:
+                db.commit()
+                continue
+            # Copy the routing fields before committing; callback may delete the row
+            # immediately. No ORM object is mutated after the outgoing HTTP request.
+            target = SimpleNamespace(
+                id=watch.id, alexa_user=watch.alexa_user, api_endpoint=watch.api_endpoint
+            )
             watch.attempts += 1
-            if alexa_arrivals.wake(relay, watch):
-                watch.notified = now
-        db.commit()
+            watch.notified = now
+            db.commit()
+            result = alexa_arrivals.wake(relay, target)
+            if result == "retry":
+                print("Alexa reminder relay wake failed; will retry", flush=True)
+            elif result == "failed":
+                # A malformed or forbidden relay request cannot deliver or cancel.
+                # Leave only the disclosed, generic expiry fallback at Amazon.
+                watch = db.get(AlexaWatch, watch_id, with_for_update=True, populate_existing=True)
+                if watch:
+                    db.delete(watch)
+                db.commit()
 
     @app.get("/alexa/info")
     def info():

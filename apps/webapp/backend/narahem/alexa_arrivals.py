@@ -1,17 +1,10 @@
-"""Alexa: "Alexa, ask Close to Home to let me know when Maya gets home" (or "leaves school").
+"""Create, update and cancel Alexa reminders for one-time location watches.
 
-The first time, Alexa asks out loud whether the skill may set reminders; one spoken "yes" is the
-household's consent, and nothing has to be done in the Alexa app. The server then keeps a
-one-day watch. When Maya's phone is next inside the place (or clearly away from it, for a
-departure), the server asks the Nära Hem Alexa
-relay to wake the skill for that Alexa user (Amazon's Skill Messaging), and in that wake-up the
-server sets a reminder a few seconds ahead, which the Echo chimes and speaks: "From Nara Hem:
-Maya has arrived home." Amazon hears that sentence; nothing else about the household.
-
-This module holds the pieces that talk to Amazon and the relay; alexa_api.py decides when.
+A reminder is created with consent during a voice session. The relay wakes
+this skill to update or delete it later. Only the reminder ID is persisted.
 """
-
 import datetime
+from urllib.parse import quote
 
 import httpx
 
@@ -28,9 +21,15 @@ WATCH_SECONDS = 86400
 MAX_WATCHES = 10
 # After an arrival, the relay is asked again for this long if the wake-up doesn't come back.
 NOTICE_SECONDS = 600
-RETRY_SECONDS = 60
 # The reminder rings this many seconds after it is set.
 REMINDER_DELAY = 10
+CLEANUP_SECONDS = 600
+MAX_ATTEMPTS = 6
+PLACEHOLDER = "Your Nara Hem location alert expired."
+DELIVERY = {
+    "arrive": "Your Nara Hem arrival alert is ready. Check Nara Hem for details.",
+    "leave": "Your Nara Hem departure alert is ready. Check Nara Hem for details.",
+}
 
 
 def system(alexa):
@@ -39,22 +38,59 @@ def system(alexa):
 
 
 def granted(alexa):
-    """Returns True if the user has let the skill set reminders."""
-    scopes = ((system(alexa).get("user") or {}).get("permissions") or {}).get("scopes") or {}
-    return (scopes.get(REMINDERS) or {}).get("status") == "GRANTED"
+    """Check whether Alexa has granted reminders access."""
+    sys = system(alexa)
+    user = sys.get("user") or {}
+    permissions = user.get("permissions") or {}
+    scopes = permissions.get("scopes") or {}
+    status = (scopes.get(REMINDERS) or {}).get("status")
+    if status == "GRANTED":
+        return True
+    if not permissions.get("consentToken"):
+        return False
+    api = endpoint(alexa)
+    token = sys.get("apiAccessToken")
+    if not api or not token:
+        return None
+    try:
+        response = httpx.get(
+            api + "/v1/alerts/reminders",
+            headers={"Authorization": "Bearer " + token},
+            timeout=2,
+        )
+    except httpx.HTTPError:
+        return None
+    if response.status_code == 200:
+        return True
+    if response.status_code in (401, 403):
+        return False
+    return None
 
 
 def reminders_accepted(payload):
-    """Returns True if the answer to the permission question allows reminders. Amazon answers a
-    version 2 request with a list of scopes, each with its own status, and a version 1 request
-    with a single scope and status.
-    """
-    scopes = payload.get("permissionScopes") or [payload]
-    return any(
-        isinstance(scope, dict)
-        and scope.get("permissionScope", REMINDERS) == REMINDERS
-        and scope.get("status") == "ACCEPTED"
-        for scope in scopes
+    """Check whether Alexa accepted reminders permission."""
+    scopes = payload.get("permissionScopes")
+    if isinstance(scopes, dict):
+        scopes = [scopes]
+    if isinstance(scopes, list):
+        matching = [
+            scope
+            for scope in scopes
+            if isinstance(scope, dict) and scope.get("permissionScope") == REMINDERS
+        ]
+        if not matching:
+            return False
+        if any(scope.get("status") == "ACCEPTED" for scope in matching):
+            return True
+        if any(
+            scope.get("status") in ("DENIED", "NOT_ANSWERED", "REDIRECT_TO_APP")
+            for scope in matching
+        ):
+            return False
+        return payload.get("status") == "ACCEPTED"
+    return (
+        payload.get("permissionScope") == REMINDERS
+        and payload.get("status") == "ACCEPTED"
     )
 
 
@@ -81,12 +117,12 @@ def ask_permission(token):
 
 
 def is_home(place):
-    """Returns True for the place called Home, which reads without "at" or "to"."""
+    """Returns True for the place called Home, which reads without \"at\" or \"to\"."""
     return place.strip().lower() == "home"
 
 
 def promise(name, place, event):
-    """Returns what Alexa says when a watch starts: "...when Maya gets home"."""
+    """Returns what Alexa says when a watch starts: \"...when Maya gets home\"."""
     if event == "leave":
         return f"Okay, I'll let you know when {name} leaves {'home' if is_home(place) else place}."
     return (
@@ -95,46 +131,102 @@ def promise(name, place, event):
 
 
 def announcement(name, place, event):
-    """Returns what the Echo says when it happens: "From Nara Hem: Maya has arrived home"."""
+    """Returns what the Echo says when it happens: \"From Nara Hem: Maya has arrived home\"."""
     if event == "leave":
         return f"From Nara Hem: {name} has left {'home' if is_home(place) else place}."
     return f"From Nara Hem: {name} has arrived {'home' if is_home(place) else 'at ' + place}."
 
 
-def reminder(text, locale):
+def reminder(text, locale, delay=REMINDER_DELAY):
     """Returns a Reminders API body for a reminder a few seconds from now."""
     now = datetime.datetime.now(datetime.UTC).replace(microsecond=0)
     return {
         "requestTime": now.strftime("%Y-%m-%dT%H:%M:%S.000"),
-        "trigger": {"type": "SCHEDULED_RELATIVE", "offsetInSeconds": REMINDER_DELAY},
+        "trigger": {"type": "SCHEDULED_RELATIVE", "offsetInSeconds": delay},
         "alertInfo": {"spokenInfo": {"content": [{"locale": locale, "text": text}]}},
-        "pushNotification": {"status": "ENABLED"},
+        "pushNotification": {"status": "DISABLED"},
     }
 
 
-def set_reminder(alexa, text):
-    """Sets the reminder with the wake-up request's own token. Returns True if Amazon took it."""
+def reminder_request(alexa, method, alert_token=None, body=None):
+    """Call Amazon and classify the result without logging credentials or reminder text."""
     address, token = endpoint(alexa), system(alexa).get("apiAccessToken")
     if not address or not token:
-        return False
-    locale = (alexa.get("request") or {}).get("locale") or "en-US"
+        return "retry", None
+    url = address + "/v1/alerts/reminders"
+    if alert_token:
+        url += "/" + quote(alert_token, safe="")
+    options = {"json": body} if body is not None else {}
     try:
-        reply = httpx.post(
-            address + "/v1/alerts/reminders",
-            json=reminder(text, locale),
+        reply = httpx.request(
+            method,
+            url,
             headers={"Authorization": "Bearer " + token},
-            timeout=5,
+            timeout=2.5,
             follow_redirects=False,
+            **options,
         )
     except httpx.HTTPError:
-        return False
-    return reply.status_code in (200, 201)
+        print(f"Alexa reminder {method}: network error", flush=True)
+        return "retry", None
+    try:
+        data = reply.json()
+    except ValueError:
+        data = None
+    data = data if isinstance(data, dict) else {}
+    status = reply.status_code
+    if status in (200, 201, 204):
+        print(f"Alexa reminder {method}: HTTP {status}", flush=True)
+        return "ok", data
+    code = data.get("code", "UNKNOWN")
+    if not isinstance(code, str) or len(code) > 80 or not code.replace("_", "").isalnum():
+        code = "UNKNOWN"
+    # Do not log untrusted response bodies or identifiers.
+    print(f"Alexa reminder {method}: HTTP {status}, code={code}", flush=True)
+    if status == 404:
+        return "gone", None
+    if status in (408, 409, 429) or status >= 500 or code == "EXPIRED_BEARER_TOKEN":
+        return "retry", None
+    return "failed", None
+
+
+def create_reminder(alexa):
+    """Create the disclosed expiry reminder while the user is in-session."""
+    locale = (alexa.get("request") or {}).get("locale") or "en-US"
+    result, data = reminder_request(
+        alexa, "POST", body=reminder(PLACEHOLDER, locale, WATCH_SECONDS + CLEANUP_SECONDS)
+    )
+    token = data.get("alertToken") if result == "ok" else None
+    return token if isinstance(token, str) and token else None
+
+
+def finish_reminder(alexa, alert_token, event, cancel=False, label=None):
+    """Update or delete an active placeholder; reconcile retries with Amazon first."""
+    result, data = reminder_request(alexa, "GET", alert_token)
+    if result != "ok":
+        return result
+    contents = ((data.get("alertInfo") or {}).get("spokenInfo") or {}).get("content") or []
+    current = contents[0] if contents and isinstance(contents[0], dict) else {}
+    text = current.get("text")
+    # A user may have deleted or edited the reminder, or a previous PUT may have
+    # succeeded even when its response timed out. Never repurpose such a reminder.
+    if data.get("status") != "ON" or text != PLACEHOLDER:
+        return "gone"
+    if cancel:
+        return reminder_request(alexa, "DELETE", alert_token)[0]
+    locale = current.get("locale") or (alexa.get("request") or {}).get("locale") or "en-US"
+    return reminder_request(
+        alexa, "PUT", alert_token, reminder(label or DELIVERY[event], locale, REMINDER_DELAY)
+    )[0]
+
+
+def retry_delay(attempts):
+    """Bound exponential backoff, including failed relay requests."""
+    return min(120, 10 * 2 ** min(max(attempts - 1, 0), 4))
 
 
 def wake(relay, watch):
-    """Asks the relay to wake the skill for the Alexa user who asked. Returns True if it took
-    the request.
-    """
+    """Classify the relay result without exposing user identifiers."""
     try:
         reply = httpx.post(
             relay + "/v1/notify",
@@ -143,5 +235,10 @@ def wake(relay, watch):
             follow_redirects=False,
         )
     except httpx.HTTPError:
-        return False
-    return reply.status_code == 202
+        return "retry"
+    if reply.status_code == 202:
+        return "ok"
+    if reply.status_code in (408, 409, 429) or reply.status_code >= 500:
+        return "retry"
+    print(f"Alexa relay rejected wake-up: HTTP {reply.status_code}", flush=True)
+    return "failed"
