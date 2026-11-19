@@ -1,6 +1,6 @@
 """Alexa account links: the admin's sign-in from the Alexa app, revocable from the server."""
 
-from sqlalchemy import Boolean, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -61,4 +61,4 @@ class AlexaWatch(Base):
     notified: Mapped[float | None] = mapped_column(Float)
     attempts: Mapped[int] = mapped_column(default=0)
     alert_token: Mapped[str | None] = mapped_column(Text)
-    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
