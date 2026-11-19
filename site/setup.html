@@ -27,6 +27,10 @@
           About 30 minutes, once. You'll start the server, give it a secure web address, create your
           household, then connect everyone's phones.
         </p>
+        <p>
+          {{name}} is free and open source (<a href="{{github}}/blob/main/LICENSE">AGPL-3.0</a>).
+          There's no subscription; you only pay for your own server, if anything.
+        </p>
 
         <nav class="toc" aria-label="Steps">
           <ol>
@@ -301,13 +305,15 @@
         <section id="google-maps">
           <h2>Optional: Google Maps in the web app</h2>
           <p>
-            The web app uses OpenStreetMap unless you give the server a Google Maps key. The iPhone
-            and Android apps already include their own maps; this only changes the web app.
+            The web app uses OpenStreetMap unless you give the server a Google Maps key, so you can
+            skip this section. The iPhone and Android apps already include their own maps; this only
+            changes the web app.
           </p>
           <ol>
             <li>
               In the <a href="https://console.cloud.google.com/">Google Cloud console</a>, create a
-              project and turn on billing. Google charges only above its monthly free allowance.
+              project and turn on billing. Google requires a billing account for any key, but a
+              household stays well inside its free monthly allowance, so you normally pay nothing.
             </li>
             <li>
               Under <strong>APIs &amp; Services → Library</strong>, enable

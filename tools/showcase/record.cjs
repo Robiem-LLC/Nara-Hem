@@ -191,6 +191,8 @@ async function tour() {
   // How this browser wrote today's date, so the demo can show the visitor's today instead.
   snapshots.recorded = await page.evaluate(() => ({
     at: Date.now(),
+    // The time zone the captured times are in, so the demo can show them in the visitor's.
+    zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     origin: location.origin,
     short: new Date().toLocaleDateString(),
     long: new Date().toLocaleDateString(undefined, {

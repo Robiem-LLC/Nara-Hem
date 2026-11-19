@@ -40,7 +40,71 @@
   const clock = (date, seconds) =>
     date.toLocaleTimeString('en-US', seconds ? { ...timeFormat, second: '2-digit' } : timeFormat);
 
-  /** Replaces the recording date in captured screens with today's date. */
+  // The recording's time zone: older recordings didn't say, and were made in Portland's.
+  const RECORDED_ZONE = S.recorded.zone || 'America/Los_Angeles';
+
+  /**
+   * Returns the moment a captured clock time stood for: that time on the recording's day, in the
+   * recording's time zone. A time later than the recording itself was the day before.
+   */
+  function recordedMoment(hours, minutes, seconds, day) {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: RECORDED_ZONE,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+      })
+        .formatToParts(new Date(S.recorded.at))
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    const wall = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    const offset = wall - Math.floor(S.recorded.at / 1000) * 1000;
+    if (day) return Date.UTC(day.year, day.month, day.day, hours, minutes, seconds) - offset;
+    const moment =
+      Date.UTC(parts.year, parts.month - 1, parts.day, hours, minutes, seconds) - offset;
+    return moment > S.recorded.at + 60000 ? moment - 86400000 : moment;
+  }
+
+  /**
+   * Redates the trip list's day headings ("Fri, Nov 13, 2026") from the first time under each,
+   * moved like every other time, so a trip shows under the visitor's own day.
+   */
+  function tripDays(html) {
+    const shift = Date.now() - S.recorded.at;
+    const heading = /<h3>(\w{3}, (\w{3}) (\d{1,2}), (\d{4}))<\/h3>/g;
+    return html.replace(heading, (text, label, month, date, year, at) => {
+      const next = /\b(\d{1,2}):(\d{2}) (AM|PM)\b/.exec(html.slice(at));
+      const parsed = new Date(`${month} ${date}, ${year}`);
+      if (!next || Number.isNaN(parsed.getTime())) return text;
+      const hours = (Number(next[1]) % 12) + (next[3] === 'PM' ? 12 : 0);
+      const day = { year: Number(year), month: parsed.getMonth(), day: Number(date) };
+      const moment = new Date(recordedMoment(hours, Number(next[2]), 0, day) + shift);
+      const shown = moment.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      return `<h3>${shown}</h3>`;
+    });
+  }
+
+  /**
+   * Replaces the recording date in captured screens with today's date, and moves every captured
+   * time by as long as it's been since the recording, shown in the visitor's own time zone.
+   */
   function today(html) {
     const shift = Date.now() - S.recorded.at;
     const now = new Date();
@@ -59,9 +123,9 @@
     return (
       html
         .replace(/\b(\d{1,2}):(\d{2})(?::(\d{2}))? (AM|PM)\b/g, (text, h, m, s, half) => {
-          const then = new Date(S.recorded.at);
-          then.setHours((Number(h) % 12) + (half === 'PM' ? 12 : 0), Number(m), Number(s || 0));
-          return clock(new Date(then.getTime() + shift), s !== undefined);
+          const hours = (Number(h) % 12) + (half === 'PM' ? 12 : 0);
+          const then = recordedMoment(hours, Number(m), Number(s || 0));
+          return clock(new Date(then + shift), s !== undefined);
         })
         .replace(/src="\/app-icon\.png"/g, 'src="demo/app-icon.png"')
         .replace(/src="\/nara-hem-wordmark\.png"/g, 'src="demo/nara-hem-wordmark.png"')
@@ -301,8 +365,8 @@
     const body = Object.hasOwn(EXTRA, screen)
       ? EXTRA[screen]()
       : screen === 'trips' && options.member && S.tripsByMember?.[options.member]
-        ? today(S.tripsByMember[options.member])
-        : today(snap.view);
+        ? today(tripDays(S.tripsByMember[options.member]))
+        : today(screen === 'trips' ? tripDays(snap.view) : snap.view);
     const [title, text] = ABOUT[screen] || ABOUT.map;
     app.innerHTML =
       today(snap.header) +
@@ -328,7 +392,9 @@
         area.insertAdjacentHTML('beforebegin', DISK_NOTE);
       }
     }
+    mapProvider(GOOGLE_KEY && !googleFailed);
     if (screen === 'map') liveMap();
+    if (screen === 'household') householdLocations();
     if (screen === 'trips') trips(options.member);
     if (screen === 'places') {
       const status = app.querySelector('#map-status');
@@ -348,7 +414,9 @@
       ?.replaceWith(
         element(
           '<div class="site-tagline"><p>A self-hosted family location tracking ecosystem.</p>' +
-            '<p>Take back your data.</p></div>',
+            '<p>Take back your data.</p>' +
+            '<p class="site-license">Free and open source (AGPL-3.0). ' +
+            'You pay only for your own server.</p></div>',
         ),
       );
     app
@@ -760,6 +828,7 @@
       return;
     }
     map = shown;
+    mapProvider(map.google);
     for (const place of D.places) map.circle(place);
     for (const html of S.map.markers) {
       const icon = element(html);
@@ -833,6 +902,29 @@
       tick();
       say('Up to date. In the real app, new locations also arrive on their own.');
     });
+  }
+
+  /** Names the map that's actually showing in the privacy note under it. */
+  function mapProvider(google) {
+    for (const slot of app.querySelectorAll('[data-slot="provider-name"]')) {
+      slot.textContent = google ? 'Google' : 'OpenStreetMap';
+    }
+  }
+
+  /**
+   * Makes Manage household's location lines match the map: the two driving members are driving
+   * now, and everyone else was last seen where the map shows them, four minutes ago.
+   */
+  function householdLocations() {
+    for (const line of app.querySelectorAll('.member-location')) {
+      const name = line.closest('.member-info')?.querySelector('h3')?.textContent;
+      if (D.live.some((l) => l.member === name)) {
+        line.textContent = `Driving · ${new Date().toLocaleString('en-US')}`;
+      } else if (D.parked[name]) {
+        const seen = new Date(Date.now() - 4 * 60000).toLocaleString('en-US');
+        line.textContent = `${D.parked[name]} · ${seen}`;
+      }
+    }
   }
 
   /** Shows the recorded trip cards for a member. */

@@ -166,6 +166,14 @@ main {
   font-weight: 600;
   color: var(--text);
 }
+.site-tagline p.site-license {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text-subdued);
+}
 .site-tagline p + p {
   margin-top: 2px;
   font-size: 12px;
