@@ -579,8 +579,8 @@ def install(
         if not confirmed:
             action = "leaves" if event == "leave" else "arrives at"
             return say(
-                f"I'll watch for when {name} {action} {place['name']} for 24 hours and notify you if it expires. "
-                "Is that okay?",
+                f"I'll watch for when {name} {action} {place['name']} for 24 hours "
+                "and notify you if it expires. Is that okay?",
                 end=False,
                 attributes={
                     "pending": {
@@ -626,22 +626,16 @@ def install(
             return say("Okay.")
         payload = request.get("payload") or {}
         if not alexa_arrivals.reminders_accepted(payload):
+            # Amazon's answer goes to the server log, not to the person who said no.
             scopes = payload.get("permissionScopes")
-            if isinstance(scopes, list):
-                statuses = [
-                    scope.get("status", "MISSING")
-                    for scope in scopes
-                    if isinstance(scope, dict)
-                ]
-            else:
-                statuses = [payload.get("status", "MISSING")]
-            code = (request.get("status") or {}).get("code", "UNKNOWN")
-            return say(
-                "Alexa permission status: "
-                + ", ".join(str(status) for status in statuses)
-                + ". Response code: "
-                + str(code)
+            listed = scopes if isinstance(scopes, list) else [payload]
+            statuses = [str(s.get("status", "MISSING"))[:20] for s in listed if isinstance(s, dict)]
+            code = str((request.get("status") or {}).get("code", "UNKNOWN"))[:8]
+            print(
+                f"Alexa reminders permission: {', '.join(statuses)}; response code {code}",
+                flush=True,
             )
+            return say("Okay. I can only let you know if I may set reminders.")
         try:
             asked = json.loads(request.get("token") or "")
         except ValueError:

@@ -1,8 +1,16 @@
-"""Create, update and cancel Alexa reminders for one-time location watches.
+"""Alexa: "Alexa, ask Close to Home to let me know when Maya gets home" (or "leaves school").
 
-A reminder is created with consent during a voice session. The relay wakes
-this skill to update or delete it later. Only the reminder ID is persisted.
+Amazon only lets a skill create a reminder while someone is talking to it. So when the watch is
+confirmed, the skill creates a placeholder reminder a day ahead ("Your Nara Hem location alert
+expired.") and keeps only its ID. When Maya arrives or leaves, the relay wakes the skill (Amazon's
+Skill Messaging), which changes that reminder to ring a few seconds later with "From Nara Hem:
+Maya has arrived home." If nothing happens, the server deletes it when the day is up; only if
+that fails does the placeholder speak. Amazon hears those sentences; nothing else about the
+household.
+
+This module holds the pieces that talk to Amazon and the relay; alexa_api.py decides when.
 """
+
 import datetime
 from urllib.parse import quote
 
@@ -38,9 +46,12 @@ def system(alexa):
 
 
 def granted(alexa):
-    """Check whether Alexa has granted reminders access."""
-    sys = system(alexa)
-    user = sys.get("user") or {}
+    """Returns True if the user lets the skill set reminders, False if not, and None if that
+    couldn't be checked. Without a granted scope in the request, a consent token is checked by
+    asking Amazon for the skill's reminders.
+    """
+    context = system(alexa)
+    user = context.get("user") or {}
     permissions = user.get("permissions") or {}
     scopes = permissions.get("scopes") or {}
     status = (scopes.get(REMINDERS) or {}).get("status")
@@ -49,7 +60,7 @@ def granted(alexa):
     if not permissions.get("consentToken"):
         return False
     api = endpoint(alexa)
-    token = sys.get("apiAccessToken")
+    token = context.get("apiAccessToken")
     if not api or not token:
         return None
     try:
@@ -68,7 +79,10 @@ def granted(alexa):
 
 
 def reminders_accepted(payload):
-    """Check whether Alexa accepted reminders permission."""
+    """Returns True if the answer to the permission question allows reminders. Amazon answers a
+    version 2 request with a list of scopes, each with its own status, and a version 1 request
+    with a single scope and status.
+    """
     scopes = payload.get("permissionScopes")
     if isinstance(scopes, dict):
         scopes = [scopes]
@@ -88,10 +102,7 @@ def reminders_accepted(payload):
         ):
             return False
         return payload.get("status") == "ACCEPTED"
-    return (
-        payload.get("permissionScope") == REMINDERS
-        and payload.get("status") == "ACCEPTED"
-    )
+    return payload.get("permissionScope") == REMINDERS and payload.get("status") == "ACCEPTED"
 
 
 def endpoint(alexa):
@@ -117,21 +128,12 @@ def ask_permission(token):
 
 
 def is_home(place):
-    """Returns True for the place called Home, which reads without \"at\" or \"to\"."""
+    """Returns True for the place called Home, which reads without "at" or "to"."""
     return place.strip().lower() == "home"
 
 
-def promise(name, place, event):
-    """Returns what Alexa says when a watch starts: \"...when Maya gets home\"."""
-    if event == "leave":
-        return f"Okay, I'll let you know when {name} leaves {'home' if is_home(place) else place}."
-    return (
-        f"Okay, I'll let you know when {name} gets {'home' if is_home(place) else 'to ' + place}."
-    )
-
-
 def announcement(name, place, event):
-    """Returns what the Echo says when it happens: \"From Nara Hem: Maya has arrived home\"."""
+    """Returns what the Echo says when it happens: "From Nara Hem: Maya has arrived home"."""
     if event == "leave":
         return f"From Nara Hem: {name} has left {'home' if is_home(place) else place}."
     return f"From Nara Hem: {name} has arrived {'home' if is_home(place) else 'at ' + place}."

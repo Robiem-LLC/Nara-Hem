@@ -300,6 +300,25 @@ class AlexaTests(unittest.TestCase):
         )
         self.assertIn("Permission granted", reply["response"]["outputSpeech"]["text"])
         self.assertEqual(self.watches(), [])
+        # Saying no is answered plainly, and sets nothing.
+        reply = self.tell(
+            access,
+            kind="Connections.Response",
+            name="AskFor",
+            payload={
+                "permissionScopes": [
+                    {"permissionScope": alexa_arrivals.REMINDERS, "status": "DENIED"}
+                ]
+            },
+            token=directive["token"],
+        )
+        said = reply["response"]["outputSpeech"]["text"]
+        self.assertEqual(said, "Okay. I can only let you know if I may set reminders.")
+        self.assertEqual(self.watches(), [])
+        # The older answer shape, a single scope and status, is understood too.
+        for status, accepted in (("DENIED", False), ("ACCEPTED", True)):
+            payload = {"permissionScope": alexa_arrivals.REMINDERS, "status": status}
+            self.assertEqual(alexa_arrivals.reminders_accepted(payload), accepted)
         # Declining the reminder must not create a watch or contact Amazon.
         _, consent = self.watch(access, "NotifyArrivalIntent", "Maya")
         with patch.object(alexa_arrivals, "create_reminder") as create:
@@ -342,6 +361,15 @@ class AlexaTests(unittest.TestCase):
             self.tell(access, kind="Messaging.MessageReceived", message={"watch": ids[0]})
         self.assertEqual(finish.call_count, 2)
         self.assertEqual(self.watches(), [])
+        # A wake-up for a watch that isn't there does nothing, and an expired token still
+        # only counts for wake-ups, not questions.
+        with patch.object(alexa_arrivals, "finish_reminder") as finish:
+            reply = self.tell(access, kind="Messaging.MessageReceived", message={"watch": "0" * 32})
+            finish.assert_not_called()
+        self.assertEqual(reply["response"], {})
+        intent = {"name": "WhereIsIntent", "slots": {"person": {"value": "Maya"}}}
+        expired = self.tell(access, intent=intent)
+        self.assertIn("link", expired["response"]["outputSpeech"]["text"])
 
     def test_watches_expire_and_give_up(self):
         self.move_in()
@@ -394,9 +422,7 @@ class AlexaTests(unittest.TestCase):
         active = {
             "status": "ON",
             "alertInfo": {
-                "spokenInfo": {
-                    "content": [{"locale": "en-US", "text": alexa_arrivals.PLACEHOLDER}]
-                }
+                "spokenInfo": {"content": [{"locale": "en-US", "text": alexa_arrivals.PLACEHOLDER}]}
             },
         }
         with patch.object(

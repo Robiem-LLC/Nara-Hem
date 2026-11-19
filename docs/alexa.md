@@ -29,12 +29,18 @@ Answer yes or no.
 - Works with any saved place: "…when Sam gets to Grandma's house", "…when Maya leaves the park".
   Without a place, it means **Home**.
 - The first time, Alexa asks "Close to Home would like to set reminders. Is that OK?" Say **yes**
-  once; nothing needs doing in the Alexa app.
-- It's spoken as a reminder a few seconds after it happens. Each request is used once and lasts a
-  day. If Mom is already home, or Maya isn't at school, Alexa says so instead.
+  once, then ask again; nothing needs doing in the Alexa app.
+- Each time, Alexa checks: "I'll watch for when Mom arrives at Home for 24 hours and notify you if
+  it expires. Is that okay?" Say **yes**. If Mom is already home, or Maya isn't at school, Alexa
+  says so instead, and the same alert can't be set twice.
+- It works through an Alexa reminder, so it shows in your reminders list ("Your Nara Hem location
+  alert expired."). When it happens, the reminder changes to ring a few seconds later with "From
+  Nara Hem: Mom has arrived home." If it doesn't happen within a day, the reminder is deleted;
+  only if that fails do you hear the "expired" line.
+- Say **cancel** to the skill to cancel all your waiting alerts.
 - Arriving counts once the phone is inside the place; leaving counts once it's well outside, so
-  GPS wobble at the edge doesn't set it off.
-- Amazon hears the sentence it speaks ("Mom has arrived home"), and nothing else.
+  GPS wobble at the edge doesn't set it off. Turning off sharing or deleting the place cancels it.
+- Amazon hears the sentences it speaks ("Mom has arrived home"), and nothing else.
 
 ## Set it up
 
