@@ -127,12 +127,18 @@ main {
   }
 }
 
-/* The filmed iPhone and Android apps, playing inside a phone frame. */
+/* The filmed iPhone and Android apps, playing inside a phone frame. Only the frame rounds the
+   corners: on iPhones, Safari stops drawing a playing video that has rounded corners of its own
+   inside a clipping parent, so the video flashed once and vanished. The mask makes Safari clip the
+   video's layer to the frame. */
 .site-phone .phone {
   width: 280px;
   max-width: 100%;
   margin: 0 auto;
   overflow: hidden;
+  isolation: isolate;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
   background: #05070d;
   border: 10px solid #05070d;
   border-radius: 44px;
@@ -149,12 +155,9 @@ main {
   height: auto;
   max-height: none;
   border: 0;
-  border-radius: 34px;
+  border-radius: 0;
   box-shadow: none;
   background: #05070d;
-}
-.site-phone .phone-android video {
-  border-radius: 20px;
 }
 
 /* The site's tagline under the wordmark, in place of the app's. */
