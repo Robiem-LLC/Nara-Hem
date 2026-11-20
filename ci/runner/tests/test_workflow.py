@@ -47,8 +47,6 @@ class WorkflowTests(unittest.TestCase):
     def test_local_only_jobs_skip_commits_made_on_the_website(self):
         for name in ["android.yaml", "ios-mac.yaml", "showcase.yaml", "linux-runner-smoke.yaml"]:
             for job_name, job in workflow(name)["jobs"].items():
-                if job_name == "release":
-                    continue  # manual runs only; the guard checks the commit
                 self.assertIn("noreply@github.com", job["if"], f"{name} {job_name}")
 
     def test_no_self_hosted_pull_request_events(self):
@@ -74,31 +72,59 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("steps.sign.outputs.ipa", upload["if"])
         self.assertNotIn("*.ipa", upload["with"]["path"])
         self.assertIn("github.event_name == 'push'", delivery["if"])
-        self.assertIn("inputs.signing == 'ad-hoc'", delivery["if"])
+        self.assertIn("env.METHOD == 'ad-hoc'", delivery["if"])
         self.assertIn("inputs.publish_to_share", delivery["if"])
         self.assertIn("--receipt", delivery["run"])
         self.assertIn('--channel "$GITHUB_REF_NAME"', delivery["run"])
         self.assertLess(steps.index(upload), steps.index(delivery))
 
-    def test_every_platform_push_produces_installable_and_full_validation_is_opt_in(self):
+    def test_dev_pushes_are_checked_and_main_pushes_release(self):
         ios = workflow("ios-mac.yaml")
-        steps = ios["jobs"]["simulator"]["steps"]
+        job = ios["jobs"]["simulator"]
+        steps = job["steps"]
+        # main pushes are signed for the App Store and go to TestFlight; dev pushes are Ad Hoc
+        # copies for the share, with the simulator tests.
+        self.assertIn("refs/heads/main' && 'app-store'", job["env"]["METHOD"])
+        self.assertIn("'ad-hoc'", job["env"]["METHOD"])
+        self.assertIn("refs/heads/dev'", job["env"]["VALIDATE"])
+        self.assertIn("inputs.mode == 'validate'", job["env"]["VALIDATE"])
         sign = next(s for s in steps if s.get("id") == "sign")
-        self.assertIn("github.event_name == 'push'", sign["if"])
-        self.assertIn("'ad-hoc'", sign["env"]["SIGNING_METHOD"])
+        self.assertEqual(sign["if"], "env.METHOD != 'none'")
+        self.assertEqual(sign["env"]["SIGNING_METHOD"], "${{ env.METHOD }}")
         sim_test = next(s for s in steps if s.get("name", "").startswith("Run simulator tests"))
-        self.assertIn("inputs.mode == 'validate'", sim_test["if"])
+        self.assertEqual(sim_test["if"], "env.VALIDATE == 'true'")
+        testflight = next(s for s in steps if s.get("id") == "testflight")
+        self.assertIn("env.METHOD == 'app-store'", testflight["if"])
         android = workflow("android.yaml")
         android_events = android.get("on", android.get("true"))
         self.assertEqual(android_events["push"]["branches"], ["main", "dev"])
         self.assertIn("apps/android/**", android_events["push"]["paths"])
-        self.assertIn("github.event_name == 'push'", android["jobs"]["build"]["if"])
+        self.assertIn("VERSION", android_events["push"]["paths"])
+        build, release = android["jobs"]["build"], android["jobs"]["release"]
+        self.assertIn("refs/heads/dev'", build["if"])
+        self.assertNotIn("refs/heads/main'", build["if"])
+        self.assertIn("refs/heads/main'", release["if"])
+        self.assertIn("github.event_name == 'push'", release["if"])
+        # A release is made only from a commit signed with an allowed key, and only once.
+        checks = "".join(s.get("run", "") for s in release["steps"])
+        self.assertIn("allowedSignersFile=.github/allowed_signers verify-commit", checks)
+        publish = next(
+            s for s in release["steps"] if s.get("name", "").startswith("Publish the GitHub")
+        )
+        self.assertEqual(publish["if"], "env.NEW_RELEASE == 'true'")
         gradle = next(
             s
             for s in android["jobs"]["build"]["steps"]
             if s.get("name", "").startswith("Compile Google Maps APK")
         )
         self.assertNotIn("test", gradle["run"])
+        site = workflow("showcase.yaml")
+        site_events = site.get("on", site.get("true"))
+        self.assertEqual(site_events["push"]["branches"], ["main"])
+        image = next(
+            s for s in site["jobs"]["site"]["steps"] if s.get("name") == "Publish the site image"
+        )
+        self.assertEqual(image["if"], "github.ref == 'refs/heads/main'")
         linux = workflow("android-tests.yaml")["jobs"]["unit-tests"]["steps"]
         checks = next(s for s in linux if s.get("name", "").startswith("Kotlin style"))
         for task in ("testOsmDebugUnitTest", "testGoogleDebugUnitTest", "lintGoogleDebug"):
