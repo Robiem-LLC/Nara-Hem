@@ -6,6 +6,7 @@ import { differentZone, knownZone, zoneTime } from '../../src/client/zones.mjs';
 // there.
 process.env.TZ = 'America/New_York';
 const evening = Date.UTC(2026, 10, 20, 1, 0);
+
 const plain = (text) => text.replaceAll(String.fromCharCode(0x202f), ' ');
 
 test('another zone shows both times, this browser first', () => {
