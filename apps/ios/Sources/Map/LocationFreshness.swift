@@ -18,7 +18,8 @@ enum LocationFreshness {
         if let battery = member.battery, battery <= 10, member.charging != true, now - heard > offMs
         {
             return Status(
-                text: "May be off · battery was \(battery)% at \(time(member.capturedAt, now, zone))",
+                text:
+                    "May be off · battery was \(battery)% at \(time(member.capturedAt, now, zone))",
                 alarming: true)
         }
         guard let since = member.stillSince else {

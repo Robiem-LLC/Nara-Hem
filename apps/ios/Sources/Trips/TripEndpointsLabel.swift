@@ -31,7 +31,7 @@ struct TripEndpointsLabel: View {
                     )
                     .font(.subheadline.weight(.semibold))
                     Text(ZoneTimes.format(trip.startedAt, zone: trip.timeZone))
-                    .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             HStack(alignment: .top, spacing: 10) {
@@ -43,7 +43,7 @@ struct TripEndpointsLabel: View {
                     )
                     .font(.subheadline.weight(.semibold))
                     Text(ZoneTimes.format(trip.endedAt, zone: trip.timeZone))
-                    .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
