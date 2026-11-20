@@ -1,14 +1,11 @@
 name: Android
+# dev: a debug APK on the Mac's share for testing. main: the release-signed APK and Play Store
+# bundle, with the version in VERSION; a new version also becomes a GitHub Release and tag.
 on:
   push:
     branches: [main, dev]
-    paths: ['apps/android/**', '.github/workflows/android.yaml']
+    paths: ['apps/android/**', '.github/workflows/android.yaml', 'VERSION']
   workflow_dispatch:
-    inputs:
-      release:
-        description: 'Release version to sign and publish, e.g. 1.0.0 (main only; needs the signed tag v1.0.0 on main). Leave empty for a normal build.'
-        type: string
-        default: ''
 permissions:
   contents: read
 # Dedicated Mac runner; only owner-merged main/dev builds. PR code never runs here.
@@ -22,9 +19,9 @@ jobs:
     # would refuse them; they're skipped here instead.
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') &&
+      github.ref == 'refs/heads/dev' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      !inputs.release && github.event.head_commit.committer.email != 'noreply@github.com'
+      github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: [self-hosted, macOS, ARM64, narahem-ios]
     timeout-minutes: 40
     permissions:
@@ -122,12 +119,14 @@ jobs:
             --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --commit "$GITHUB_SHA" \
             --channel "$GITHUB_REF_NAME"
   release:
-    # Started by hand on main with a version: builds the Google Maps APK and the Play Store bundle,
-    # signs both with Robiem's release key and publishes them as the GitHub Release for the tag.
+    # Every main push: builds the Google Maps APK and the Play Store bundle and signs both with
+    # Robiem's release key. When VERSION has no tag yet, they're published as its GitHub Release,
+    # which creates the tag at this commit.
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
-      github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' &&
-      inputs.release != ''
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: [self-hosted, macOS, ARM64, narahem-ios]
     timeout-minutes: 40
     permissions:
@@ -135,29 +134,32 @@ jobs:
     env:
       JAVA_HOME: /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
       ANDROID_HOME: /Users/narahemci/Library/Android/sdk
-      VERSION: ${{ inputs.release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check the release tag is signed by Robiem and on main, then use its commit
+      - name: Read VERSION, check this commit is signed by Robiem, and whether it's a new version
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?$ ]] || {
-            echo 'Release version must look like 1.0.0 or 1.0.0-beta.1' >&2
-            exit 1
-          }
-          tag="v$VERSION"
-          git merge-base --is-ancestor "refs/tags/$tag" "$GITHUB_SHA" || {
-            echo "Tag $tag must be on a commit in main's history." >&2
+          version="$(tr -d '[:space:]' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?$ ]] || {
+            echo 'VERSION must look like 1.0.1 or 1.0.1-beta.1' >&2
             exit 1
           }
           # Only keys listed in main's .github/allowed_signers (Robiem's) are accepted.
-          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-tag "$tag"
-          # Build exactly the tagged commit, even if main has moved on since.
-          git checkout --quiet --detach "refs/tags/$tag"
-          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-commit "$GITHUB_SHA"
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            echo "v$version is already released; building for the Mac share only."
+            new=false
+          else
+            new=true
+          fi
+          {
+            echo "VERSION=$version"
+            echo "NEW_RELEASE=$new"
+            echo "RELEASE_COMMIT=$GITHUB_SHA"
+          } >> "$GITHUB_ENV"
       - name: Verify local Android toolchain
         run: |
           set -euo pipefail
@@ -216,9 +218,7 @@ jobs:
             echo "APK version is not $VERSION" >&2
             exit 1
           }
-      - name: Publish the GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Collect the release files
         run: |
           set -euo pipefail
           dist="$RUNNER_TEMP/release-$GITHUB_RUN_ID"
@@ -229,7 +229,13 @@ jobs:
           # always gets the newest release (invitations and the website link to it).
           cp "$dist/NaraHem-Android-$VERSION.apk" "$dist/NaraHem-Android.apk"
           (cd "$dist" && shasum -a 256 NaraHem-Android-* > SHA256SUMS && cat SHA256SUMS)
-          python3 ci/github_release.py --version "$VERSION" --dir "$dist"
+      - name: Publish the GitHub Release (new versions only)
+        if: env.NEW_RELEASE == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 ci/github_release.py --version "$VERSION" --dir "$RUNNER_TEMP/release-$GITHUB_RUN_ID" \
+            --target "$RELEASE_COMMIT"
       - name: Deliver the release APK to Mac share
         # Beside the everyday builds, in its own android-release folder.
         if: vars.NARAHEM_LOCAL_PUBLISH_ENABLED == 'true'

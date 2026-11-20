@@ -60,6 +60,13 @@ class GitHubReleaseTests(unittest.TestCase):
         self.assertEqual(uploads[0][1], UPLOAD.split("{")[0] + "?name=NaraHem-Android-1.0.0.apk")
         self.assertEqual(uploads[0][2:], (b"apk", "application/vnd.android.package-archive"))
         self.assertEqual(uploads[1][3], "text/plain")
+        self.assertNotIn("target_commitish", created[2])
+
+    def test_a_new_release_tags_the_commit_it_was_built_from(self):
+        github = FakeGitHub()
+        publish(REPO, "1.0.1", [self.apk], "token", github, target="a" * 40)
+        self.assertEqual(github.calls[1][2]["target_commitish"], "a" * 40)
+        self.assertEqual(github.calls[1][2]["tag_name"], "v1.0.1")
 
     def test_running_again_replaces_files_of_the_same_name(self):
         release = {

@@ -35,6 +35,11 @@ browsers only get household data once they've been approved.
 - Adding some kind of trackers. _special request_
 - If requested adding google voice etc.
 
+## Development
+
+Work goes to `dev` and moves to `main` once it's checked; pushes to `main` publish the website,
+TestFlight and Android releases. See [docs/releasing.md](docs/releasing.md).
+
 ## Security
 
 See [SECURITY.md](SECURITY.md).

@@ -130,12 +130,20 @@ fi
 export XCODE_XCCONFIG_FILE="$XCCONFIG"
 unset IOS_GOOGLE_MAPS_KEY
 
+# The version people see comes from the repository's VERSION file, the same as Android's.
+VERSION_FILE="$(git rev-parse --show-toplevel)/VERSION"
+MARKETING_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+if [[ ! "$MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "::error::VERSION must look like 1.0.1"
+  exit 1
+fi
+
 ARCHIVE="$SIGNING_DIR/NaraHem.xcarchive"
 EXPORT="$SIGNING_DIR/ipa-export"
 xcodebuild archive -project NaraHem.xcodeproj -scheme NaraHem \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$ARCHIVE" -derivedDataPath "$SIGNING_DIR/derived" \
-  "CURRENT_PROJECT_VERSION=$((GITHUB_RUN_NUMBER + 1000))"
+  "CURRENT_PROJECT_VERSION=$((GITHUB_RUN_NUMBER + 1000))" "MARKETING_VERSION=$MARKETING_VERSION"
 
 xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   -exportPath "$EXPORT" -exportOptionsPlist "$SIGNING_DIR/export-options.plist"
