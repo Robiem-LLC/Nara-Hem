@@ -107,7 +107,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("github.event_name == 'push'", release["if"])
         # A release is made only from a commit signed with an allowed key, and only once.
         checks = "".join(s.get("run", "") for s in release["steps"])
-        self.assertIn("allowedSignersFile=.github/allowed_signers verify-commit", checks)
+        self.assertIn("allowedSignersFile=.github/allowed_signers", checks)
+        self.assertIn('"${signers[@]}" verify-commit', checks)
+        self.assertIn('"${signers[@]}" verify-tag', checks)
         publish = next(
             s for s in release["steps"] if s.get("name", "").startswith("Publish the GitHub")
         )

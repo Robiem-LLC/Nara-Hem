@@ -39,8 +39,16 @@ def call(method, url, token, body=None, content_type="application/json"):
         "X-GitHub-Api-Version": "2022-11-28",
     }
     request = urllib.request.Request(url, data=data, method=method, headers=headers)
-    with urllib.request.urlopen(request, timeout=300) as response:
-        text = response.read()
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response:
+            text = response.read()
+    except urllib.error.HTTPError as error:
+        # GitHub says why (a missing tag, a ruleset); keep it with the error, but not for 404s,
+        # which callers expect.
+        if error.code != 404:
+            detail = error.read().decode("utf-8", "replace")[:500]
+            print(f"GitHub answered {error.code} to {method} {url}: {detail}", file=sys.stderr)
+        raise
     return json.loads(text) if text else None
 
 

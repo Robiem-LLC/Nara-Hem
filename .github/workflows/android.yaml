@@ -120,8 +120,8 @@ jobs:
             --channel "$GITHUB_REF_NAME"
   release:
     # Every main push: builds the Google Maps APK and the Play Store bundle and signs both with
-    # Robiem's release key. When VERSION has no tag yet, they're published as its GitHub Release,
-    # which creates the tag at this commit.
+    # Robiem's release key. When VERSION has no GitHub Release yet and its tag (v1.0.1), signed by
+    # Robiem, is on this very commit, they're published as that release.
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
       github.ref == 'refs/heads/main' &&
@@ -139,7 +139,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Read VERSION, check this commit is signed by Robiem, and whether it's a new version
+      - name: Read VERSION, check this commit is signed by Robiem, and whether to release it
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="$(tr -d '[:space:]' < VERSION)"
@@ -147,12 +149,21 @@ jobs:
             echo 'VERSION must look like 1.0.1 or 1.0.1-beta.1' >&2
             exit 1
           }
+          tag="v$version"
           # Only keys listed in main's .github/allowed_signers (Robiem's) are accepted.
-          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers verify-commit "$GITHUB_SHA"
-          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
-            echo "v$version is already released; building for the Mac share only."
-            new=false
+          signers=(-c gpg.ssh.allowedSignersFile=.github/allowed_signers)
+          git "${signers[@]}" verify-commit "$GITHUB_SHA"
+          released=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$tag")
+          new=false
+          if [[ "$released" == 200 ]]; then
+            echo "$tag is already released; building for the Mac share only."
+          elif ! git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "::notice title=Not released::No $tag tag yet; built for the Mac share only. Push a signed $tag tag on this commit to release it."
+          elif [[ "$(git rev-parse "$tag^{commit}")" != "$GITHUB_SHA" ]]; then
+            echo "::notice title=Not released::$tag is on another commit; built for the Mac share only."
           else
+            git "${signers[@]}" verify-tag "$tag"
             new=true
           fi
           {
@@ -219,6 +230,7 @@ jobs:
             exit 1
           }
       - name: Collect the release files
+        id: collect
         run: |
           set -euo pipefail
           dist="$RUNNER_TEMP/release-$GITHUB_RUN_ID"
@@ -234,11 +246,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python3 ci/github_release.py --version "$VERSION" --dir "$RUNNER_TEMP/release-$GITHUB_RUN_ID" \
-            --target "$RELEASE_COMMIT"
+          python3 ci/github_release.py --version "$VERSION" --dir "$RUNNER_TEMP/release-$GITHUB_RUN_ID"
       - name: Deliver the release APK to Mac share
-        # Beside the everyday builds, in its own android-release folder.
-        if: vars.NARAHEM_LOCAL_PUBLISH_ENABLED == 'true'
+        # Beside the everyday builds, in its own android-release folder; even if publishing failed.
+        if: always() && steps.collect.outcome == 'success' && vars.NARAHEM_LOCAL_PUBLISH_ENABLED == 'true'
         run: |
           set -euo pipefail
           source="$RUNNER_TEMP/android-release-publish-$GITHUB_RUN_ID"
