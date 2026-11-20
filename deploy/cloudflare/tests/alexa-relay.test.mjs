@@ -257,9 +257,15 @@ test('Alexa relay refuses strangers, altered tokens and servers without Alexa', 
   const unlinked = await (await call('/skill', skillRequest('not-a-sealed-token'))).json();
   assert.equal(unlinked.response.card.type, 'LinkAccount');
   assert.equal(server.seen.skill.length, 0, 'nothing reaches a server without a sealed token');
+  // Alexa asking whether it could send a request here without the skill's name gets a quiet no.
+  const asking = skillRequest('not-a-sealed-token');
+  const body = JSON.parse(asking.body);
+  body.request = { type: 'CanFulfillIntentRequest', intent: { name: 'WhereIsIntent' } };
+  const quiet = await (await call('/skill', { ...asking, body: JSON.stringify(body) })).json();
+  assert.deepEqual(quiet.response, { canFulfillIntent: { canFulfill: 'NO' } });
   assert.equal((await call('/callback?state=forged&code=x')).status, 400);
   const health = await (await call('/health')).json();
-  assert.equal(health.workerRevision, 'alexa-4');
+  assert.equal(health.workerRevision, 'alexa-5');
 });
 
 test('Alexa relay takes requests from the Amazon-hosted forwarder with its secret', async () => {

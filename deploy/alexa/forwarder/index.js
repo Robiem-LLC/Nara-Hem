@@ -66,6 +66,10 @@ exports.handler = async (event) => {
     return await relay(event);
   } catch (error) {
     console.log('Nära Hem relay failed: ' + error.message);
+    // Alexa asking whether to send a request here without the skill's name gets a quiet no.
+    if (event?.request?.type === 'CanFulfillIntentRequest') {
+      return { version: '1.0', response: { canFulfillIntent: { canFulfill: 'NO' } } };
+    }
     return say("I couldn't reach the Nära Hem relay. Please try again in a moment.");
   }
 };

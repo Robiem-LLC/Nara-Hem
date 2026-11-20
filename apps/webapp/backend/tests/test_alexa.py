@@ -371,6 +371,44 @@ class AlexaTests(unittest.TestCase):
         expired = self.tell(access, intent=intent)
         self.assertIn("link", expired["response"]["outputSpeech"]["text"])
 
+    def test_alexa_can_be_asked_without_the_skills_name(self):
+        """Alexa asks first whether this household could answer ("where is Maya?") and only sends
+        the request when the answer is yes or maybe. Asking changes nothing and says nothing.
+        """
+        self.move_in()
+        access = self.link()["access_token"]
+
+        def asked(name, **slots):
+            filled = {k: {"name": k, "value": v} for k, v in slots.items()}
+            reply = self.tell(
+                access, kind="CanFulfillIntentRequest", intent={"name": name, "slots": filled}
+            )
+            self.assertNotIn("outputSpeech", reply["response"])
+            return reply["response"]["canFulfillIntent"]
+
+        self.assertEqual(
+            asked("WhereIsIntent", person="Maya"),
+            {
+                "canFulfill": "YES",
+                "slots": {"person": {"canUnderstand": "YES", "canFulfill": "YES"}},
+            },
+        )
+        self.assertEqual(asked("FindPhoneIntent", person="Mya")["canFulfill"], "MAYBE")
+        self.assertEqual(asked("WhereIsIntent", person="Zebulon")["canFulfill"], "NO")
+        self.assertEqual(asked("NotifyArrivalIntent", person="Maya")["canFulfill"], "YES")
+        mars = asked("NotifyLeaveIntent", person="Maya", place="Mars")
+        self.assertEqual(mars["canFulfill"], "NO")
+        self.assertEqual(mars["slots"]["place"], {"canUnderstand": "NO", "canFulfill": "NO"})
+        self.assertEqual(asked("AMAZON.HelpIntent")["canFulfill"], "NO")
+        self.assertEqual(self.watches(), [], "asking sets nothing up")
+        # Someone who hasn't linked a household gets a quiet no, not a request to link.
+        stranger = self.tell(
+            "not-a-link-token",
+            kind="CanFulfillIntentRequest",
+            intent={"name": "WhereIsIntent", "slots": {}},
+        )
+        self.assertEqual(stranger["response"], {"canFulfillIntent": {"canFulfill": "NO"}})
+
     def test_watches_expire_and_give_up(self):
         self.move_in()
         access = self.link()["access_token"]

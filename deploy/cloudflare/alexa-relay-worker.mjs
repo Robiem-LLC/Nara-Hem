@@ -35,7 +35,7 @@
  */
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const REVISION = 'alexa-4';
+const REVISION = 'alexa-5';
 const SERVER_CLIENT_ID = 'nara-hem-relay';
 const AMAZON_HOSTS = ['pitangui.amazon.com', 'layla.amazon.com', 'alexa.amazon.co.jp'];
 const MAX_BODY = 16384;
@@ -404,7 +404,12 @@ async function alexaBody(request) {
 /** Passes an Alexa request on to the household server it was linked to and returns the answer. */
 async function passOn(env, body, alexa, signature) {
   const linked = await open(env, 'access', alexa?.context?.System?.user?.accessToken);
+  // Alexa asking whether to send a request here without the skill's name gets a quiet no whenever
+  // the household can't answer, never a spoken message.
+  const asking = alexa?.request?.type === 'CanFulfillIntentRequest';
+  const no = () => json({ version: '1.0', response: { canFulfillIntent: { canFulfill: 'NO' } } });
   if (!linked) {
+    if (asking) return no();
     return speech(
       "Please link Nara Hem in the Alexa app, with your household server's address.",
       true,
@@ -420,10 +425,12 @@ async function passOn(env, body, alexa, signature) {
       redirect: 'manual',
       signal: AbortSignal.timeout(6500),
     });
-    if (!reply.ok) return speech("Your Nära Hem server didn't accept that request.");
+    if (!reply.ok) {
+      return asking ? no() : speech("Your Nära Hem server didn't accept that request.");
+    }
     return json(await reply.json());
   } catch {
-    return speech("I couldn't reach your Nära Hem server.");
+    return asking ? no() : speech("I couldn't reach your Nära Hem server.");
   }
 }
 

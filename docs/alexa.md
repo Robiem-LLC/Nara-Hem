@@ -42,6 +42,18 @@ Answer yes or no.
   GPS wobble at the edge doesn't set it off. Turning off sharing or deleting the place cancels it.
 - Amazon hears the sentences it speaks ("Mom has arrived home"), and nothing else.
 
+## Without saying "Close to Home"
+
+In the US, you can also just say "Alexa, where is Maya?" or "Alexa, find Sam's phone". Alexa may
+then ask Nära Hem whether it knows Maya, and if your household has someone by that name, it
+answers as if you'd used the skill's name. Amazon decides when to do this, so it doesn't always
+work, and Alexa's own features can win; saying "ask Close to Home…" always works. Nothing is shared
+when Alexa asks: your server only answers yes or no.
+
+To make your own phrase always reach the skill, add an Alexa routine: **More → Routines → +**,
+**When this happens → Voice** with your phrase, then **Add action → Customized** with, for example,
+`ask close to home where is Maya`.
+
 ## Set it up
 
 1. Add `NARAHEM_ALLOW_ALEXA=true` to your stack's environment variables and redeploy.

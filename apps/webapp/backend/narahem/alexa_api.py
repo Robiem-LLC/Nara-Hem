@@ -54,8 +54,8 @@ RELAY_CLIENT_ID = "nara-hem-relay"
 SERVICE_ID = "0" * 32
 CODE_SECONDS = 300
 ACCESS_SECONDS = 3600
-
 _zones = {}
+
 # Alexa gives up after about 8 seconds, so the street address lookup gets at most this long.
 ADDRESS_SECONDS = 2.5
 _lookups = concurrent.futures.ThreadPoolExecutor(max_workers=4)
@@ -69,11 +69,13 @@ FIELDS = (
     "code_challenge_method",
 )
 
+# Requests Alexa may send here without the skill's name ("Alexa, where is Maya?"), after asking
+# whether this household could handle them (Amazon's name-free interaction).
+NAME_FREE = {"WhereIsIntent", "FindPhoneIntent", "NotifyArrivalIntent", "NotifyLeaveIntent"}
 
 def enabled():
     """Returns True if the server was started with Alexa allowed."""
     return os.environ.get(ENVIRONMENT, "").strip().lower() in ("1", "true", "yes")
-
 
 def store():
     """Returns the store skill's relay address and skill ID ({} if it isn't published). The
@@ -86,12 +88,10 @@ def store():
         return {}
     return {"relay": f"https://{parts.netloc}", "skill_id": skill}
 
-
 def challenge_for(verifier):
     """Returns the PKCE S256 challenge for a verifier."""
     hashed = hashlib.sha256(verifier.encode()).digest()
     return base64.urlsafe_b64encode(hashed).decode().rstrip("=")
-
 
 def client_allowed(fields):
     """Returns True for a sign-in request from the Nära Hem relay, with its return address and a
@@ -106,6 +106,14 @@ def client_allowed(fields):
         and len(fields.get("code_challenge", "")) == 43
     )
 
+def fulfil_answer(can, slots=None):
+    """Returns the answer to Alexa's "could you handle this?" question: YES, MAYBE or NO, and for
+    each slot whether its value is understood and can be acted on.
+    """
+    body = {"canFulfill": can}
+    if slots:
+        body["slots"] = slots
+    return {"version": "1.0", "response": {"canFulfillIntent": body}}
 
 def say(text, end=True, attributes=None, link=False):
     """Returns an Alexa response that says text."""
@@ -115,7 +123,6 @@ def say(text, end=True, attributes=None, link=False):
     if link:
         response["card"] = {"type": "LinkAccount"}
     return {"version": "1.0", "sessionAttributes": attributes or {}, "response": response}
-
 
 def link_page(fields, error=""):
     """Returns the sign-in page the Alexa app shows while linking."""
@@ -146,7 +153,6 @@ def link_page(fields, error=""):
         "<button type=submit>Link to Alexa</button></form></main></body></html>",
         status_code=400 if error and not fields.get("redirect_uri") else 200,
     )
-
 
 def install(
     app,
@@ -455,6 +461,8 @@ def install(
             return {"version": "1.0", "response": {}}
         if kind == "LaunchRequest":
             return say("Ask me where someone is, or to find someone's phone.", end=False)
+        if kind == "CanFulfillIntentRequest":
+            return can_fulfil(db, alexa)
         if kind == "Connections.Response":
             return permission_answer(db, alexa, link)
         if kind == "Messaging.MessageReceived":
@@ -529,6 +537,32 @@ def install(
                 confirmed=pending.get("ask") == "notify_confirmed",
             )
         return say(where_is(db, member, alexa))
+
+    def can_fulfil(db, alexa):
+        """Says whether this household could answer a request Alexa may route here without the
+        skill's name: YES for someone in the household (and a saved place, for alerts), MAYBE
+        for a name that's only close, otherwise NO. As Amazon requires, it says nothing and
+        changes nothing.
+        """
+        intent = (alexa.get("request") or {}).get("intent") or {}
+        if intent.get("name") not in NAME_FREE:
+            return fulfil_answer("NO")
+        slots = intent.get("slots") or {}
+        found, _ = alexa_speech.match_name(
+            (slots.get("person") or {}).get("value") or "", household(db)
+        )
+        can = {"exact": "YES", "close": "MAYBE"}.get(found, "NO")
+        answers = {}
+        if "person" in slots:
+            answers["person"] = {"canUnderstand": can, "canFulfill": "YES" if found else "NO"}
+        if intent["name"] in ("NotifyArrivalIntent", "NotifyLeaveIntent"):
+            spoken = (slots.get("place") or {}).get("value")
+            known = "YES" if place_named(db, spoken) else "NO"
+            if "place" in slots:
+                answers["place"] = {"canUnderstand": known, "canFulfill": known}
+            if known == "NO":
+                can = "NO"
+        return fulfil_answer(can, answers)
 
     def place_named(db, heard):
         """Returns the saved place Alexa heard ("home" when none was said), or None."""
@@ -827,7 +861,8 @@ def install(
             # A wake-up can come hours after anyone last spoke to the skill, with the token Amazon
             # last had. It can only speak for a watch this link set up, so an expired token still
             # counts for it.
-            wake = (alexa.get("request") or {}).get("type") == "Messaging.MessageReceived"
+            kind = (alexa.get("request") or {}).get("type")
+            wake = kind == "Messaging.MessageReceived"
             if (
                 not token
                 or not link
@@ -835,12 +870,15 @@ def install(
                 or (link.access_expires < time.time() and not wake)
                 or not current_link(db, link)
             ):
+                # Alexa asking whether to send a request here gets a quiet no, not a link card.
+                if kind == "CanFulfillIntentRequest":
+                    return fulfil_answer("NO")
                 return say(
                     "Please link Nara Hem to your account in the Alexa app, signing in as your "
                     "household's administrator.",
                     link=True,
                 )
-            if time.time() - (link.last_used or 0) > 60:
+            if kind != "CanFulfillIntentRequest" and time.time() - (link.last_used or 0) > 60:
                 link.last_used = time.time()
                 db.commit()
             return answer(db, alexa, link, background_tasks)

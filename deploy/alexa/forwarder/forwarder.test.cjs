@@ -35,4 +35,7 @@ test('forwards the request to the relay with its secret and returns the answer',
   fakeRelay(401, '{}', seen);
   const said = await handler(event);
   assert.match(said.response.outputSpeech.text, /couldn't reach the Nära Hem relay/);
+  // Alexa asking whether to send a request here without the skill's name gets a quiet no.
+  const asking = { request: { type: 'CanFulfillIntentRequest' } };
+  assert.deepEqual((await handler(asking)).response, { canFulfillIntent: { canFulfill: 'NO' } });
 });
