@@ -30,6 +30,7 @@ from narahem.schemas import (
     RecordInput,
 )
 from narahem.trip_processing import normalize_points
+from narahem.zones import zone_name
 
 
 def install(
@@ -382,6 +383,7 @@ def install(
             "samples",
             "trip_id",
             "origin_name",
+            "tz",
             "matched",
             "partial",
             "processing",
@@ -591,6 +593,7 @@ def trip_summary(record, device, meta):
         "origin_name": str(meta["origin_name"])[:80]
         if isinstance(meta.get("origin_name"), str)
         else None,
+        "tz": zone_name(meta.get("tz")),
         "route": outline,
         "matched": False,
         "partial": False,

@@ -30,10 +30,7 @@ struct TripEndpointsLabel: View {
                             ? "Departure location unavailable" : "Left from \(origin)"
                     )
                     .font(.subheadline.weight(.semibold))
-                    Text(
-                        Date(timeIntervalSince1970: Double(trip.startedAt) / 1000)
-                            .formatted(date: .omitted, time: .shortened)
-                    )
+                    Text(ZoneTimes.format(trip.startedAt, zone: trip.timeZone))
                     .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -45,10 +42,7 @@ struct TripEndpointsLabel: View {
                             ? "Arrival location unavailable" : "Arrived at \(destination)"
                     )
                     .font(.subheadline.weight(.semibold))
-                    Text(
-                        Date(timeIntervalSince1970: Double(trip.endedAt) / 1000)
-                            .formatted(date: .omitted, time: .shortened)
-                    )
+                    Text(ZoneTimes.format(trip.endedAt, zone: trip.timeZone))
                     .font(.caption).foregroundStyle(.secondary)
                 }
             }

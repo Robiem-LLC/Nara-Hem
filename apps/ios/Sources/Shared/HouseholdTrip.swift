@@ -21,4 +21,8 @@ struct HouseholdTrip: Codable, Identifiable {
     var originName: String? = nil
     var startLabel: String? = nil
     var endLabel: String? = nil
+
+    /// The time zone the member's phone reported with the trip (or, for older trips, their latest
+    /// one), if known.
+    var timeZone: String? = nil
 }

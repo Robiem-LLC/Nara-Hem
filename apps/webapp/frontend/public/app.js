@@ -850,7 +850,10 @@ function updateMemberDetails() {
           data: p.location,
         })
       : null;
-    const suffix = p ? ` · ${new Date(p.captured_at).toLocaleString()}${fresh.suffix}` : '';
+    const at = p
+      ? window.FamilyClient.zoneTime(p.captured_at, p.location?.tz, { withDate: true })
+      : '';
+    const suffix = p ? ` · ${at}${fresh.suffix}` : '';
     const fix = p?.location;
     const fallback = p
       ? `${Number(fix.lat).toFixed(5)}, ${Number(fix.lon).toFixed(5)}` + suffix

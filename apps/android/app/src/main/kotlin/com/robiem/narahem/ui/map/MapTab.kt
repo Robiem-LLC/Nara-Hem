@@ -44,13 +44,12 @@ import com.robiem.narahem.MemberDetailRow
 import com.robiem.narahem.data.household.HouseholdPerson
 import com.robiem.narahem.data.settings.MapCamera
 import com.robiem.narahem.ui.AppState
+import com.robiem.narahem.ui.ZoneTimes
 import com.robiem.narahem.ui.components.ExternalDirections
 import com.robiem.narahem.ui.components.messageColor
 import com.robiem.narahem.ui.places.PlaceGeometry
 import com.robiem.narahem.ui.settings.RoundProfilePhoto
 import com.robiem.narahem.ui.theme.NaraHemTheme
-import java.text.DateFormat
-import java.util.Date
 
 /** Map tab connected to [MapViewModel]. */
 @Composable
@@ -335,11 +334,10 @@ private fun ColumnScope.MemberDetails(
                     "No shared GPS yet"
                 } else {
                     "Last update " +
-                        java.text.DateFormat.getDateTimeInstance(
-                            java.text.DateFormat.MEDIUM,
-                            java.text.DateFormat.SHORT
-                        ).format(
-                            java.util.Date(chosenPerson.capturedAt)
+                        ZoneTimes.format(
+                            chosenPerson.capturedAt,
+                            chosenPerson.timeZone,
+                            withDate = true
                         )
                 },
                 style = MaterialTheme.typography.bodySmall,

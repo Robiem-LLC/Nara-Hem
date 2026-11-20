@@ -752,7 +752,8 @@ class NativeHouseholdRepository(
                     startLabel = item.optString("start_label").takeIf {
                         it.isNotBlank()
                     }?.take(200),
-                    endLabel = item.optString("end_label").takeIf { it.isNotBlank() }?.take(200)
+                    endLabel = item.optString("end_label").takeIf { it.isNotBlank() }?.take(200),
+                    timeZone = item.optString("tz").takeIf { it.isNotBlank() && it.length <= 64 }
                 )
             )
             val route = item.optJSONArray("route") ?: continue
@@ -866,7 +867,8 @@ class NativeHouseholdRepository(
                 data?.optDouble("recent_trip_max_speed_mps")?.takeIf { it.isFinite() },
                 data?.optString("trip_id")?.takeIf { it.matches(Regex("[a-f0-9]{32}")) },
                 location?.optLong("still_since")?.takeIf { it > 0 },
-                location?.optLong("last_contact")?.takeIf { it > 0 }
+                location?.optLong("last_contact")?.takeIf { it > 0 },
+                data?.optString("tz")?.takeIf { it.isNotBlank() && it.length <= 64 }
             )
         }
         val places = decrypted.filter {
@@ -1172,6 +1174,8 @@ class NativeHouseholdRepository(
         fix.tripStartedAt?.let { payload.put("trip_started_at", it) }
         fix.tripId?.let { payload.put("trip_id", it) }
         fix.recentTripMaxSpeedMps?.let { payload.put("recent_trip_max_speed_mps", it) }
+        // The phone's time zone, so people elsewhere see this person's own time too.
+        payload.put("tz", java.util.TimeZone.getDefault().id)
         publish("location", v.accountId, payload, capturedAt = capturedAt)
     }
 

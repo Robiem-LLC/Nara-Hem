@@ -287,6 +287,14 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(result.status_code, 201, result.text)
         self.assertEqual(len(result.json()["records"]), 8)
 
+    def test_only_real_looking_time_zones_are_kept(self):
+        from narahem.zones import zone_name
+
+        for good in ("America/New_York", "UTC", "America/Argentina/Buenos_Aires", "Etc/GMT+5"):
+            self.assertEqual(zone_name(good), good)
+        for bad in (None, 5, "", "America/<script>", "a" * 65, "../etc/passwd", "New York"):
+            self.assertIsNone(zone_name(bad))
+
     def test_trip_summary_with_full_route_outline_is_accepted(self):
         # iOS sends up to ~128 full-precision outline points; that exceeded the old 2 KiB limit.
         owner = self.bootstrap()
@@ -560,6 +568,7 @@ class RelayTests(unittest.TestCase):
             "samples": 30,
             "start": [40.03, -74.0],
             "end": [40.0015, -74.0],
+            "tz": "America/New_York",
         }
         trip = self.publish(a, kind="event", captured=end, data=summary)["body"]["id"]
         url = f"/api/trips?account_id={a['account_id']}&start={start - 1000}&end={end + 1000}"
@@ -568,6 +577,8 @@ class RelayTests(unittest.TestCase):
             return self.call(b, "GET", url).json()["trips"][0]
 
         self.assertNotIn("start_label", listed(), "no label until the server has looked")
+        # The phone's time zone comes back with the trip, so viewers can show its own time.
+        self.assertEqual(listed()["tz"], "America/New_York")
         with patch(
             "narahem.household_alerts.lookup_address", return_value="556 Myrtle Ave, Clifton"
         ) as lookup:

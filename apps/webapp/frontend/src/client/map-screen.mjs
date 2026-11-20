@@ -31,6 +31,7 @@ import { devices } from './devices-screen.mjs';
 import { placeState, publish } from './records.mjs';
 import { state } from './state.mjs';
 import { tripScreen } from './trips-screen.mjs';
+import { zoneTime } from './zones.mjs';
 
 /** Place thumbnail maps, reused between refreshes. */
 export const placeTileMaps = new Map();
@@ -563,10 +564,9 @@ function point(lat, lon, accuracy) {
  * location that may be wrong.
  */
 export function freshness(p, now = Date.now()) {
+  const zone = p.data?.tz;
   const when = (ms) =>
-    new Date(ms).toDateString() === new Date(now).toDateString()
-      ? new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-      : new Date(ms).toLocaleString();
+    zoneTime(ms, zone, { withDate: new Date(ms).toDateString() !== new Date(now).toDateString() });
   if (now - p.captured_at <= 1200000) return { suffix: '', alarming: false };
   const heard = Math.max(p.captured_at, p.last_contact || 0);
   const battery = p.data?.battery_pct;
@@ -742,17 +742,14 @@ function showMember(person, layout, profile, username) {
   ].join(' · ');
   const extra = details ? ' · ' + details : '';
   // A fix's time is when it was reported, not when they arrived, so no arrival time is shown.
-  const reported = new Date(p.captured_at).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const reported = zoneTime(p.captured_at, p.data.tz);
   const popup = node('div');
   const heading = node('strong', name);
   const description = node(
     'p',
     moving ? `Traveling · last update ${reported}` : `At ${address} · last update ${reported}`,
   );
-  const capturedAt = new Date(p.captured_at).toLocaleString();
+  const capturedAt = zoneTime(p.captured_at, p.data.tz, { withDate: true });
   const listingText = (where) =>
     `${name}: ${where}${extra}${fresh.suffix || ' · recent'} · ${capturedAt}`;
   const listing = node('p', listingText(address));

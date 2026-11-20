@@ -1,6 +1,7 @@
 package com.robiem.narahem.ui.map
 
 import com.robiem.narahem.data.household.HouseholdPerson
+import com.robiem.narahem.ui.ZoneTimes
 import java.text.DateFormat
 import java.util.Date
 
@@ -25,7 +26,8 @@ object LocationFreshness {
             return Status(
                 " · may be off",
                 true,
-                "May be off: its battery was $battery% at ${time(person.capturedAt, now)}."
+                "May be off: its battery was $battery% at " +
+                    "${time(person.capturedAt, now, person.timeZone)}."
             )
         }
         val since = person.stillSince ?: return Status(
@@ -34,26 +36,21 @@ object LocationFreshness {
             "Last reported location is over 20 minutes old. Verify before traveling."
         )
         val contact = person.lastContact?.takeIf { it > person.capturedAt + 60_000L }
+        val zone = person.timeZone
         return Status(
-            " · since ${time(since, now)}",
+            " · since ${time(since, now, zone)}",
             false,
-            "Stayed here since ${time(since, now)}." +
-                (contact?.let { " Phone last heard from at ${time(it, now)}." } ?: "")
+            "Stayed here since ${time(since, now, zone)}." +
+                (contact?.let { " Phone last heard from at ${time(it, now, zone)}." } ?: "")
         )
     }
 
-    /** Formats a time, adding the date if it isn't today. */
-    private fun time(at: Long, now: Long): String {
+    /** Formats a time, adding the date if it isn't today and the member's own time if it differs. */
+    private fun time(at: Long, now: Long, zone: String?): String {
         val sameDay =
             DateFormat.getDateInstance().format(Date(at)) ==
                 DateFormat.getDateInstance().format(Date(now))
-        return (
-            if (sameDay) {
-                DateFormat.getTimeInstance(DateFormat.SHORT)
-            } else {
-                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
-            }
-            ).format(Date(at))
+        return ZoneTimes.format(at, zone, withDate = !sameDay)
     }
 
     /**

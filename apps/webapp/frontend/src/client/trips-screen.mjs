@@ -30,6 +30,7 @@ import {
 } from './core.mjs';
 import { publish } from './records.mjs';
 import { state } from './state.mjs';
+import { zoneTime } from './zones.mjs';
 
 /**
  * Shows the trips screen for a member: range picker, trip and stop cards, and more history on
@@ -74,8 +75,11 @@ export async function tripScreen(epoch) {
   let scrollBusy = false;
   const current = (request) =>
     epoch === state.renderEpoch && state.vault === expected && request === requestNumber;
-  const time = (value) =>
-    new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  // The member's time zone from their latest location; a trip's own zone wins when it has one.
+  let memberZone = null;
+  const zoneOf = (entry) => entry?.tz || memberZone;
+  const time = (value, entry) => zoneTime(value, zoneOf(entry));
+  const dated = (value, entry) => zoneTime(value, zoneOf(entry), { withDate: true });
   /** Sets the name of a trip end: the server's label, a saved place or a street address. */
   async function label(target, point, request, preferredPlace = null, known = null) {
     if (known) {
@@ -248,6 +252,8 @@ export async function tripScreen(epoch) {
   /** Rebuilds the trip and stop cards. */
   function render(request) {
     const account = form.elements.member.value;
+    memberZone =
+      state.states?.find((p) => p.kind === 'location' && p.entity_id === account)?.data?.tz || null;
     const { values, entries } = timelineEntries(trips, samples, places);
     let day = '';
     list.replaceChildren();
@@ -281,7 +287,7 @@ export async function tripScreen(epoch) {
     const sameDay =
       new Date(entry.startedAt).toLocaleDateString() ===
       new Date(entry.endedAt).toLocaleDateString();
-    const when = (value) => (sameDay ? time(value) : new Date(value).toLocaleString());
+    const when = (value) => (sameDay ? time(value, entry) : dated(value, entry));
     const duration = durationText(entry.endedAt - entry.startedAt);
     card.className = 'trip-row timeline-card';
     const at = node('span', 'At ');
@@ -293,7 +299,7 @@ export async function tripScreen(epoch) {
     if (entry.current) {
       // Still there: "At Home since 2:10 PM", with the date if it began on an earlier day.
       const today = new Date(entry.startedAt).toDateString() === new Date().toDateString();
-      const since = today ? time(entry.startedAt) : new Date(entry.startedAt).toLocaleString();
+      const since = today ? time(entry.startedAt, entry) : dated(entry.startedAt, entry);
       title.append(node('span', ` since ${since}`));
       card.append(title);
     } else {
@@ -369,7 +375,10 @@ export async function tripScreen(epoch) {
       tripBoundaryPlace(entry, endpoints, [...samples.values()], places, 'end'),
       entry.endLabel,
     );
-    card.append(title, node('p', `${time(entry.startedAt)} – ${time(entry.endedAt)}`));
+    card.append(
+      title,
+      node('p', `${time(entry.startedAt, entry)} – ${time(entry.endedAt, entry)}`),
+    );
     stats.className = 'trip-stats';
     for (const text of [
       `${(entry.distanceMeters / 1609.344).toFixed(2)} mi`,
@@ -397,7 +406,7 @@ export async function tripScreen(epoch) {
       large,
       node(
         'p',
-        `${time(entry.startedAt)} – ${time(entry.endedAt)} · ` +
+        `${time(entry.startedAt, entry)} – ${time(entry.endedAt, entry)} · ` +
           `${(entry.distanceMeters / 1609.344).toFixed(2)} mi · Top speed ` +
           `${(entry.maxSpeedMps * 2.236936).toFixed(0)} mph`,
       ),
@@ -576,6 +585,7 @@ export async function tripScreen(epoch) {
           maxSpeedMps: row.max_speed_mps,
           samples: row.samples,
           tripId: row.trip_id || null,
+          tz: typeof row.tz === 'string' && row.tz.length <= 64 ? row.tz : null,
           matched: row.matched === true,
           normalized: true,
           processing: row.processing === true,

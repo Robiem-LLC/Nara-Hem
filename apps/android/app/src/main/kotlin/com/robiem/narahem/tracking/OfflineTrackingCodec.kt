@@ -21,6 +21,8 @@ object OfflineTrackingCodec {
         fix.tripStartedAt?.let { data.put("trip_started_at", it) }
         fix.tripId?.let { data.put("trip_id", it) }
         fix.recentTripMaxSpeedMps?.let { data.put("recent_trip_max_speed_mps", it.toDouble()) }
+        // The phone's time zone, so people elsewhere see this person's own time too.
+        data.put("tz", java.util.TimeZone.getDefault().id)
         return JSONObject().put("kind", "location").put("captured", at).put("data", data)
     }
 
@@ -34,6 +36,7 @@ object OfflineTrackingCodec {
                 .put("started_at", summary.startedAt).put("ended_at", summary.endedAt)
                 .put("max_speed_mps", summary.maxSpeedMps.toDouble())
                 .put("distance_m", summary.distanceMeters).put("samples", summary.samples)
+                .put("tz", java.util.TimeZone.getDefault().id)
                 .apply {
                     summary.tripId?.let { put("trip_id", it) }
                     summary.originName?.takeIf {

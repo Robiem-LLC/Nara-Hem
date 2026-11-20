@@ -39,6 +39,7 @@ import com.robiem.narahem.data.household.HouseholdTrip
 import com.robiem.narahem.data.trips.TripStop
 import com.robiem.narahem.data.trips.TripTimeline
 import com.robiem.narahem.ui.AppState
+import com.robiem.narahem.ui.ZoneTimes
 import com.robiem.narahem.ui.map.TripRouteMap
 import com.robiem.narahem.ui.places.PlaceGeometry
 import com.robiem.narahem.ui.theme.cardBorder
@@ -48,11 +49,15 @@ import java.util.Date
 /** Looks up a street address near a point. Returns null when address lookups are disabled. */
 typealias AddressNear = suspend (latitude: Double, longitude: Double) -> String?
 
-/** Formats a time of day. */
-private fun time(value: Long) = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(value))
+/** Formats a time of day, with the member's own time beside it when their zone differs. */
+private fun time(value: Long, zone: String?) = ZoneTimes.format(value, zone)
 
 /** Formats a date. */
 private fun date(value: Long) = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(value))
+
+/** Returns a trip's time zone, or the member's latest one for older trips without it. */
+private fun zoneOf(state: AppState, accountId: String, own: String? = null) =
+    own ?: state.people.firstOrNull { it.id == accountId }?.timeZone
 
 /** Formats a duration as "12 min" or "1 hr 5 min". */
 private fun duration(ms: Long): String {
@@ -149,7 +154,9 @@ fun TripTimelineCards(
                 if (trip != null) {
                     TripCard(trip, state, mapsEnabled, addressNear) { selected = trip }
                 } else if (stop != null) {
-                    StopCard(stop, state.places, addressNear) { saving = stop }
+                    StopCard(stop, state.places, addressNear, zoneOf(state, stop.accountId)) {
+                        saving = stop
+                    }
                 }
             }
         }
@@ -234,7 +241,8 @@ private fun TripCard(
             addressNear,
             trip.endLabel
         )
-        Text("${time(trip.startedAt)} – ${time(trip.endedAt)}")
+        val zone = zoneOf(state, trip.accountId, trip.timeZone)
+        Text("${time(trip.startedAt, zone)} – ${time(trip.endedAt, zone)}")
         Text(sourceLabel(trip), style = MaterialTheme.typography.labelMedium)
         if (trip.partial) {
             Text("Partial GPS observations", style = MaterialTheme.typography.bodySmall)
@@ -304,11 +312,12 @@ private fun StopCard(
     stop: TripStop,
     places: List<HouseholdPlace>,
     addressNear: AddressNear?,
+    zone: String?,
     onSave: () -> Unit
 ) {
     val overnight = date(stop.startedAt) != date(stop.endedAt)
-    val from = (if (overnight) date(stop.startedAt) + " " else "") + time(stop.startedAt)
-    val to = (if (overnight) date(stop.endedAt) + " " else "") + time(stop.endedAt)
+    val from = (if (overnight) date(stop.startedAt) + " " else "") + time(stop.startedAt, zone)
+    val to = (if (overnight) date(stop.endedAt) + " " else "") + time(stop.endedAt, zone)
     val span = if (stop.gapMillis > 0) " span" else ""
     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("At", style = MaterialTheme.typography.titleSmall)
@@ -371,10 +380,10 @@ private fun TripDetailsDialog(
                     addressNear,
                     trip.endLabel
                 )
+                val zone = zoneOf(state, trip.accountId, trip.timeZone)
                 Text(
-                    "${time(
-                        trip.startedAt
-                    )} – ${time(trip.endedAt)} · ${duration(trip.endedAt - trip.startedAt)}"
+                    "${time(trip.startedAt, zone)} – ${time(trip.endedAt, zone)} · " +
+                        duration(trip.endedAt - trip.startedAt)
                 )
                 Text(
                     "%.2f mi · Top speed %.0f mph".format(

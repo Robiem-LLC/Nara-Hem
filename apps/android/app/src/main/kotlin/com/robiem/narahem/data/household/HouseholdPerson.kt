@@ -23,5 +23,7 @@ data class HouseholdPerson(
      * Since when this member has stayed put, and when any of their phones last reached the server.
      */
     val stillSince: Long? = null,
-    val lastContact: Long? = null
+    val lastContact: Long? = null,
+    /** The time zone the member's phone reported with this location, if it sent one. */
+    val timeZone: String? = null
 )

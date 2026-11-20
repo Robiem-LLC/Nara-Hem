@@ -61,7 +61,8 @@ final class TripsViewModel {
         tripDays = days
         let viewer = session.viewerCacheId
         if changed || trips.isEmpty {
-            trips = TripSummaryCache.load(viewer: viewer, member: memberId, days: days)
+            trips = withZone(
+                TripSummaryCache.load(viewer: viewer, member: memberId, days: days), memberId)
             tripPoints = []
         }
         tripListRevision += 1
@@ -73,7 +74,7 @@ final class TripsViewModel {
                 TripSummaryCache.save(fresh, viewer: viewer, member: memberId, days: days)
                 if revision == tripListRevision && selectedMemberId == memberId && tripDays == days
                 {
-                    trips = fresh
+                    trips = withZone(fresh, memberId)
                     indexedProcessingEnabled = processing
                     roadMatchingEnabled = matching
                     session.message = ""
@@ -83,6 +84,17 @@ final class TripsViewModel {
                     session.message = "Trip refresh unavailable: \(error.localizedDescription)"
                 }
             }
+        }
+    }
+
+    /// Gives trips without their own time zone the member's latest one, so their times can show
+    /// the member's own clock too.
+    private func withZone(_ list: [HouseholdTrip], _ memberId: String) -> [HouseholdTrip] {
+        let zone = session.members.first { $0.id == memberId }?.timeZone
+        return list.map { trip in
+            var trip = trip
+            if trip.timeZone == nil { trip.timeZone = zone }
+            return trip
         }
     }
 

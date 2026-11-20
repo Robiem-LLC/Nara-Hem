@@ -4,8 +4,8 @@
 
 The household server is the source of truth. It can read:
 
-- **Locations:** every GPS fix a phone sends (position, accuracy, speed, battery, charging, drive ID), for the retention period (14 days by default).
-- **Trips:** start and end times and points, distance, top speed, route outline, and the full GPS route.
+- **Locations:** every GPS fix a phone sends (position, accuracy, speed, battery, charging, drive ID, the phone's time zone), for the retention period (14 days by default).
+- **Trips:** start and end times and points, the phone's time zone, distance, top speed, route outline, and the full GPS route.
 - **Saved places:** names, centers, radii and alert rules.
 - **Profiles:** names and photos.
 - **Alerts:** it decides and writes "Sam left Home" and "Sam arrived at Work after a 7.1 mile drive" itself.

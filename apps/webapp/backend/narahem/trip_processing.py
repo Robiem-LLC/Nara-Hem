@@ -21,6 +21,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from narahem.models import EncryptedRecord, IndexedTrip, LatestState
+from narahem.zones import zone_name
 
 
 def meters(a, b):
@@ -355,6 +356,7 @@ class TripProcessor:
                     "origin_name": str(summary["origin_name"])[:80]
                     if isinstance(summary.get("origin_name"), str)
                     else None,
+                    "tz": zone_name(summary.get("tz")),
                     "route": route,
                     "matched": bool(road),
                     "partial": len(fixes) < 3,

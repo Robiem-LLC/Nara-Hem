@@ -64,7 +64,8 @@ extension TrustedHousehold {
                 charging: data?["charging"] as? Bool,
                 tripId: data?["trip_id"] as? String,
                 stillSince: (currentLocations[id]?["still_since"] as? NSNumber)?.intValue,
-                lastContact: (currentLocations[id]?["last_contact"] as? NSNumber)?.intValue)
+                lastContact: (currentLocations[id]?["last_contact"] as? NSNumber)?.intValue,
+                timeZone: (data?["tz"] as? String).flatMap { $0.count <= 64 ? $0 : nil })
         }
         members = rosterMembers
         places = saved
@@ -255,6 +256,8 @@ extension TrustedHousehold {
         if let battery = fix.batteryPct { data["battery_pct"] = battery }
         if let charging = fix.charging { data["charging"] = charging }
         if let tripId = fix.tripId { data["trip_id"] = tripId }
+        // The phone's time zone, so people elsewhere see this person's own time too.
+        data["tz"] = TimeZone.current.identifier
         try await publish(
             kind: "location", entityId: identity.accountId, data: data,
             capturedAt: Int(fix.capturedAt.timeIntervalSince1970 * 1000))
@@ -296,6 +299,7 @@ extension TrustedHousehold {
             if let battery = fix.batteryPct { data["battery_pct"] = battery }
             if let charging = fix.charging { data["charging"] = charging }
             if let tripId = fix.tripId { data["trip_id"] = tripId }
+            data["tz"] = TimeZone.current.identifier
             var payload = context
             payload["domain"] = "narahem.payload.v1"
             payload["data"] = data
@@ -337,6 +341,7 @@ extension TrustedHousehold {
         ]
         if let tripId = trip.tripId { data["trip_id"] = tripId }
         if let origin = trip.originName, !origin.isEmpty { data["origin_name"] = origin }
+        data["tz"] = TimeZone.current.identifier
         if let start = trip.start, start.count == 2 { data["start"] = start }
         if let end = trip.end, end.count == 2 { data["end"] = end }
         if let preview = trip.preview, preview.count >= 2, preview.count <= 128 {
@@ -439,6 +444,7 @@ extension TrustedHousehold {
                 trip.end = row["end"] as? [Double]
                 trip.preview = row["preview"] as? [[Double]]
                 trip.originName = row["origin_name"] as? String
+                trip.timeZone = (row["tz"] as? String).flatMap { $0.count <= 64 ? $0 : nil }
                 trip.startLabel = (row["start_label"] as? String).flatMap {
                     $0.isEmpty ? nil : String($0.prefix(200))
                 }

@@ -25,5 +25,7 @@ data class HouseholdTrip(
     val preview: List<List<Double>> = emptyList(),
     /** Where the trip started and ended, as the server named them (a saved place or an address). */
     val startLabel: String? = null,
-    val endLabel: String? = null
+    val endLabel: String? = null,
+    /** The time zone the member's phone reported with the trip, if it sent one. */
+    val timeZone: String? = null
 )

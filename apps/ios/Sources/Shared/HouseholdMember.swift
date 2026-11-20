@@ -18,4 +18,7 @@ struct HouseholdMember: Identifiable {
     /// milliseconds.
     var stillSince: Int? = nil
     var lastContact: Int? = nil
+
+    /// The time zone the member's phone reported with this location, if it sent one.
+    var timeZone: String? = nil
 }

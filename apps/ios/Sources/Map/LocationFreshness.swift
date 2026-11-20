@@ -11,31 +11,32 @@ enum LocationFreshness {
     static func of(
         _ member: HouseholdMember, now: Int = Int(Date().timeIntervalSince1970 * 1000)
     ) -> Status {
-        let updated = "Updated " + time(member.capturedAt, now)
+        let zone = member.timeZone
+        let updated = "Updated " + time(member.capturedAt, now, zone)
         if now - member.capturedAt <= staleMs { return Status(text: updated, alarming: false) }
         let heard = max(member.capturedAt, member.lastContact ?? 0)
         if let battery = member.battery, battery <= 10, member.charging != true, now - heard > offMs
         {
             return Status(
-                text: "May be off · battery was \(battery)% at \(time(member.capturedAt, now))",
+                text: "May be off · battery was \(battery)% at \(time(member.capturedAt, now, zone))",
                 alarming: true)
         }
         guard let since = member.stillSince else {
             return Status(text: updated + " · stale", alarming: true)
         }
-        var text = "Here since " + time(since, now)
+        var text = "Here since " + time(since, now, zone)
         if let contact = member.lastContact, contact > member.capturedAt + 60_000 {
-            text += " · heard from " + time(contact, now)
+            text += " · heard from " + time(contact, now, zone)
         }
         return Status(text: text, alarming: false)
     }
 
-    /// Formats a time, adding the date if it isn't today.
-    private static func time(_ ms: Int, _ now: Int) -> String {
+    /// Formats a time, adding the date if it isn't today and the member's own time if it differs.
+    private static func time(_ ms: Int, _ now: Int, _ zone: String?) -> String {
         let date = Date(timeIntervalSince1970: Double(ms) / 1000)
         let today = Calendar.current.isDate(
             date, inSameDayAs: Date(timeIntervalSince1970: Double(now) / 1000))
-        return date.formatted(date: today ? .omitted : .abbreviated, time: .shortened)
+        return ZoneTimes.format(ms, zone: zone, withDate: !today)
     }
 
     /// Freshness text and whether it should be shown as a warning.
