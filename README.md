@@ -37,8 +37,10 @@ browsers only get household data once they've been approved.
 
 ## Development
 
-Work goes to `dev` and moves to `main` once it's checked; pushes to `main` publish the website,
-TestFlight and Android releases. See [docs/releasing.md](docs/releasing.md).
+Work goes to `dev` and moves to `main` once it's checked; pushes to `main` publish the website and
+server image. TestFlight and Android releases are manual workflow runs. See
+[docs/releasing.md](docs/releasing.md). Store screenshots and art are in
+[docs/marketing](docs/marketing).
 
 ## Security
 

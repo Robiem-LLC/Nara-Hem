@@ -59,7 +59,7 @@ class WorkflowTests(unittest.TestCase):
                 self.assertIn("vars.NARAHEM_TRUSTED_REPOSITORY", job["if"])
         config = workflow("ios-mac.yaml")
         events = config.get("on", config.get("true"))
-        self.assertEqual(events["push"]["branches"], ["main", "dev"])
+        self.assertEqual(events["push"]["branches"], ["dev"])
         self.assertIn("apps/ios/**", events["push"]["paths"])
         self.assertEqual(events["workflow_dispatch"]["inputs"]["signing"]["default"], "ad-hoc")
 
@@ -78,15 +78,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('--channel "$GITHUB_REF_NAME"', delivery["run"])
         self.assertLess(steps.index(upload), steps.index(delivery))
 
-    def test_dev_pushes_are_checked_and_main_pushes_release(self):
+    def test_dev_pushes_are_checked_and_releases_are_only_manual(self):
         ios = workflow("ios-mac.yaml")
         job = ios["jobs"]["simulator"]
         steps = job["steps"]
-        # main pushes are signed for the App Store and go to TestFlight; dev pushes are Ad Hoc
-        # copies for the share, with the simulator tests.
-        self.assertIn("refs/heads/main' && 'app-store'", job["env"]["METHOD"])
-        self.assertIn("'ad-hoc'", job["env"]["METHOD"])
-        self.assertIn("refs/heads/dev'", job["env"]["VALIDATE"])
+        # dev pushes are Ad Hoc copies for the share, with the simulator tests. A push never goes
+        # to TestFlight: only a manual run that chooses app-store does.
+        self.assertEqual(
+            job["env"]["METHOD"], "${{ github.event_name == 'push' && 'ad-hoc' || inputs.signing }}"
+        )
+        self.assertNotIn("app-store", job["env"]["METHOD"])
+        inputs = ios.get("on", ios.get("true"))["workflow_dispatch"]["inputs"]
+        self.assertIn("app-store", inputs["signing"]["options"])
+        self.assertIn("github.event_name == 'push'", job["env"]["VALIDATE"])
         self.assertIn("inputs.mode == 'validate'", job["env"]["VALIDATE"])
         sign = next(s for s in steps if s.get("id") == "sign")
         self.assertEqual(sign["if"], "env.METHOD != 'none'")
@@ -97,14 +101,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("env.METHOD == 'app-store'", testflight["if"])
         android = workflow("android.yaml")
         android_events = android.get("on", android.get("true"))
-        self.assertEqual(android_events["push"]["branches"], ["main", "dev"])
+        self.assertEqual(android_events["push"]["branches"], ["dev"])
+        self.assertFalse(android_events["workflow_dispatch"]["inputs"]["release"]["default"])
         self.assertIn("apps/android/**", android_events["push"]["paths"])
         self.assertIn("VERSION", android_events["push"]["paths"])
         build, release = android["jobs"]["build"], android["jobs"]["release"]
         self.assertIn("refs/heads/dev'", build["if"])
         self.assertNotIn("refs/heads/main'", build["if"])
         self.assertIn("refs/heads/main'", release["if"])
-        self.assertIn("github.event_name == 'push'", release["if"])
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.release", release["if"])
+        self.assertNotIn("'push'", release["if"])
         # A release is made only from a commit signed with an allowed key, and only once.
         checks = "".join(s.get("run", "") for s in release["steps"])
         self.assertIn("allowedSignersFile=.github/allowed_signers", checks)

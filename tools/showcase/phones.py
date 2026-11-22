@@ -19,6 +19,9 @@ from pathlib import Path
 ANDROID_PACKAGE = "com.robiem.narahem"
 # Bottom tabs never move, so a remembered position is safe to tap.
 TABS = ("Map", "Trips", "Places", "Settings")
+# Screenshots for the app stores (tools/showcase/store.py): chapter, and seconds into it to take
+# it, once the screen has settled.
+STORE_SHOTS = {"map": 10, "member": 5, "trip": 4, "places": 4, "live": 12}
 
 
 def chapters_from(marks, started):
@@ -90,6 +93,8 @@ def film_iphone(server, email, password, route, output, device, xctestrun, secon
         stderr=subprocess.STDOUT,
     )
     recording, started, code_sent, driving = None, None, False, False
+    shots_due, shots_taken = {}, set()
+    (Path(output) / "store").mkdir(exist_ok=True)
     try:
         while test.poll() is None:
             if recording is None and (control / "ready").exists():
@@ -120,6 +125,21 @@ def film_iphone(server, email, password, route, output, device, xctestrun, secon
                     check=False,
                 )
                 driving = True
+            if (control / "chapters.txt").exists():
+                for line in (control / "chapters.txt").read_text().splitlines():
+                    name = line.split()[0]
+                    if name in STORE_SHOTS and name not in shots_due and name not in shots_taken:
+                        shots_due[name] = time.time() + STORE_SHOTS[name]
+            for name, at in list(shots_due.items()):
+                if time.time() >= at:
+                    del shots_due[name]
+                    shots_taken.add(name)
+                    subprocess.run(
+                        [*simctl, "io", device, "screenshot", "--type=png"]
+                        + [str(Path(output) / "store" / f"ios-{name}.png")],
+                        check=False,
+                        capture_output=True,
+                    )
             time.sleep(0.3)
     finally:
         if recording:
@@ -295,6 +315,27 @@ class Android:
                     return True
         return False
 
+    def screenshot(self, path):
+        """Saves the screen as a PNG, if the device gives one."""
+        png = subprocess.run([*self.adb, "exec-out", "screencap", "-p"], capture_output=True).stdout
+        if png.startswith(b"\x89PNG"):
+            Path(path).parent.mkdir(exist_ok=True)
+            Path(path).write_bytes(png)
+
+    def clean_status_bar(self):
+        """Shows a tidy status bar (9:41, full battery and signal, no notifications)."""
+        self.shell("settings", "put", "global", "sysui_demo_allowed", "1", check=False)
+        demo = ["am", "broadcast", "-a", "com.android.systemui.demo", "-e", "command"]
+        for extra in (
+            ["enter"],
+            ["clock", "-e", "hhmm", "0941"],
+            ["battery", "-e", "level", "100", "-e", "plugged", "false"],
+            ["network", "-e", "wifi", "show", "-e", "level", "4"],
+            ["network", "-e", "mobile", "show", "-e", "level", "4", "-e", "datatype", "none"],
+            ["notifications", "-e", "visible", "false"],
+        ):
+            self.shell(*demo, *extra, check=False)
+
     def back(self):
         """Presses Back."""
         self.shell("input", "keyevent", "KEYCODE_BACK")
@@ -408,6 +449,8 @@ def film_android(server, email, password, route, output, seconds_per_point=1.5):
         setup = stop_recording(phone, setup, setup_remote, Path(output) / "android-setup.mp4")
         write_captions(captions, setup_started, Path(output) / "android-captions.json")
 
+        phone.clean_status_bar()
+        shot = lambda name: phone.screenshot(Path(output) / "store" / f"android-{name}.png")  # noqa: E731
         recording = subprocess.Popen(
             [*phone.adb, "shell", "screenrecord", "--bit-rate", "8000000", remote],
             stdout=subprocess.DEVNULL,
@@ -423,10 +466,14 @@ def film_android(server, email, password, route, output, seconds_per_point=1.5):
             target=drive_emulator, args=(phone, route, seconds_per_point, stop), daemon=True
         ).start()
         mark("map")
-        time.sleep(14)
+        time.sleep(10)
+        shot("map")
+        time.sleep(4)
         if phone.tap("Alex", timeout=5, exact=False, required=False):
             mark("member")
-            time.sleep(8)
+            time.sleep(5)
+            shot("member")
+            time.sleep(3)
             # Back would leave the app here; the member details live on the map screen.
             phone.tap("Map", required=False)
             time.sleep(2)
@@ -434,13 +481,19 @@ def film_android(server, email, password, route, output, seconds_per_point=1.5):
         phone.tap("Trips")
         time.sleep(3)
         phone.tap("Alex", timeout=5, required=False)
-        time.sleep(6)
+        time.sleep(4)
+        shot("trips")
+        time.sleep(2)
         mark("places")
         phone.tap("Places")
-        time.sleep(7)
+        time.sleep(4)
+        shot("places")
+        time.sleep(3)
         mark("live")
         phone.tap("Map")
-        time.sleep(16)
+        time.sleep(12)
+        shot("live")
+        time.sleep(4)
         mark("end")
     finally:
         stop.set()

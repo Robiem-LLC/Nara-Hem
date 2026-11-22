@@ -178,13 +178,23 @@ jobs:
         run: |
           adb emu kill 2>/dev/null || true
           [ -n "${SHOWCASE_SIMULATOR:-}" ] && xcrun simctl shutdown "$SHOWCASE_SIMULATOR" 2>/dev/null || true
+      - name: App Store and Google Play images
+        # From whatever screenshots filming took; the store images are never required. The
+        # marketing artifact is laid out like docs/marketing, to copy over it.
+        if: always()
+        continue-on-error: true
+        working-directory: tools/showcase
+        run: |
+          set -euo pipefail
+          python store.py screenshots "$OUT" "$OUT/marketing"
+          python store.py art "$OUT/marketing"
       - name: Keep only the newest build files (oldest deleted first)
         if: always()
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
           KEEP: ${{ vars.NARAHEM_ARTIFACT_KEEP || '5' }}
-        run: python3 ci/keep_artifacts.py --keep "$KEEP" showcase-phones
+        run: python3 ci/keep_artifacts.py --keep "$KEEP" showcase-phones marketing
       - name: Upload the phone recordings
         if: always()
         # When GitHub's artifact storage is full, the site keeps the phone videos it already has.
@@ -197,6 +207,15 @@ jobs:
             ${{ runner.temp }}/phones/*.json
             ${{ runner.temp }}/phones/*.log
           retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload the store images
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: marketing
+          path: ${{ runner.temp }}/phones/marketing
+          retention-days: 30
           if-no-files-found: ignore
 
   site:

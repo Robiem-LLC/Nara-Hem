@@ -1,11 +1,17 @@
 name: Android
-# dev: a debug APK on the Mac's share for testing. main: the release-signed APK and Play Store
-# bundle, with the version in VERSION; a new version also becomes a GitHub Release and tag.
+# dev pushes: a debug APK on the Mac's share for testing. Pushes to main build nothing here. The
+# release-signed APK and Play Store bundle are a manual run: Run workflow on main with "release"
+# ticked; the version comes from VERSION, and a new version also becomes a GitHub Release.
 on:
   push:
-    branches: [main, dev]
+    branches: [dev]
     paths: ['apps/android/**', '.github/workflows/android.yaml', 'VERSION']
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'On main: build and sign the release APK and Play Store bundle, and publish a new version as a GitHub Release'
+        type: boolean
+        default: false
 permissions:
   contents: read
 # Dedicated Mac runner; only owner-merged main/dev builds. PR code never runs here.
@@ -119,13 +125,14 @@ jobs:
             --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --commit "$GITHUB_SHA" \
             --channel "$GITHUB_REF_NAME"
   release:
-    # Every main push: builds the Google Maps APK and the Play Store bundle and signs both with
-    # Robiem's release key. When VERSION has no GitHub Release yet and its tag (v1.0.1), signed by
-    # Robiem, is on this very commit, they're published as that release.
+    # Only when asked (a manual run on main with "release" ticked): builds the Google Maps APK and
+    # the Play Store bundle and signs both with Robiem's release key. When VERSION has no GitHub
+    # Release yet and its tag (v1.0.1), signed by Robiem, is on this very commit, they're published
+    # as that release.
     if: >-
       github.repository == vars.NARAHEM_TRUSTED_REPOSITORY &&
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.event_name == 'workflow_dispatch' && inputs.release &&
       github.event.head_commit.committer.email != 'noreply@github.com'
     runs-on: [self-hosted, macOS, ARM64, narahem-ios]
     timeout-minutes: 40

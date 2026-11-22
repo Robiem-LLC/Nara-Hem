@@ -1,10 +1,10 @@
 name: iOS Mac mini
 # dev pushes are checked: simulator tests, Swift formatting and an Ad Hoc copy on the Mac's share.
-# main pushes are releases: signed for the App Store and uploaded to TestFlight, with the version in
-# VERSION. Manual runs do what's chosen.
+# Pushes to main build nothing here. TestFlight is a manual run: Run workflow on main, with signing
+# set to app-store; the version comes from VERSION.
 on:
   push:
-    branches: [main, dev]
+    branches: [dev]
     paths:
       ['apps/ios/**', 'ci/runner/**', 'ci/publish/**', '.github/workflows/ios-mac.yaml', 'VERSION']
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
         default: fast
         options: [fast, validate]
       signing:
-        description: 'none = simulator only; ad-hoc = signed installable device IPA; app-store = upload to TestFlight'
+        description: 'none = simulator only; ad-hoc = signed installable device IPA; app-store = sign for the App Store and upload to TestFlight'
         type: choice
         default: ad-hoc
         options: [none, development, ad-hoc, app-store]
@@ -43,8 +43,8 @@ jobs:
       contents: read
       actions: write
     env:
-      METHOD: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' && 'app-store' || 'ad-hoc') || inputs.signing }}
-      VALIDATE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/dev' || inputs.mode == 'validate' }}
+      METHOD: ${{ github.event_name == 'push' && 'ad-hoc' || inputs.signing }}
+      VALIDATE: ${{ github.event_name == 'push' || inputs.mode == 'validate' }}
     defaults:
       run:
         shell: bash

@@ -17,10 +17,19 @@ other way round) without uninstalling first.
 ## Pushes to `main`
 
 - **Website:** built and published.
-- **iPhone:** signed for the App Store and uploaded to TestFlight.
-- **Android:** the APK and Play Store bundle signed with the release key, also copied to the Mac's
-  share.
 - **Server:** the `latest` image.
+
+Nothing is signed, sent to TestFlight or released for Android by a push. Those are manual runs, so
+`main` can take changes without releasing anything.
+
+## Releasing the apps
+
+In GitHub, open **Actions**, pick the workflow, click **Run workflow** and choose `main`:
+
+- **iPhone:** "iOS Mac mini" with **signing** set to `app-store`. It's signed for the App Store and
+  uploaded to TestFlight.
+- **Android:** "Android" with **release** ticked. The APK and Play Store bundle are signed with the
+  release key and copied to the Mac's share, and a new version becomes a GitHub Release (below).
 
 ## Versions
 
@@ -29,18 +38,18 @@ one:
 
 1. Change `VERSION` on `dev` and check the builds there.
 2. Merge `dev` into `main` and, in the same push, a `v1.0.1` tag on that commit, signed with a key
-   in [`.github/allowed_signers`](../.github/allowed_signers):
+   in [`.github/allowed_signers`](../.github/allowed_signers), then run the releases above:
 
    ```bash
    git tag -s v1.0.1 -m "Nära Hem 1.0.1" main
    git push origin main v1.0.1
    ```
 
-When `main` builds a version that has no GitHub Release yet and finds its signed tag on the very
-commit it built, the Android files are published as that release; invitations link to the newest
-one. Otherwise (no tag yet, a tag on another commit, or a version already released) it still builds,
-goes to TestFlight and the Mac's share, and says why it didn't release. Pushing the tag later and
-re-running the Android workflow releases it then.
+When an Android release run builds a version that has no GitHub Release yet and finds its signed
+tag on the very commit it built, the Android files are published as that release; invitations link
+to the newest one. Otherwise (no tag yet, a tag on another commit, or a version already released)
+it still builds, goes to the Mac's share, and says why it didn't release. Pushing the tag later and
+running it again releases it then.
 
 The "Release tags" ruleset keeps `v*` tags from being made, moved or deleted by anyone but the
 owner. Only commits signed with an allowed key are built at all; commits made on GitHub's website
