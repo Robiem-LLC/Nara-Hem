@@ -7,9 +7,9 @@
 and puts each on a branded background under a headline, in ios/screenshots at 1206 x 2622
 (6.3" iPhone, the size App Store Connect requires, scaled down for smaller iPhones) and
 android/screenshots at 1080 x 1920 (Google Play rejects images more than twice as tall as
-they are wide, as raw Pixel screenshots are). `art` draws the App Store header (ios/app-store-header.png,
-3840 x 1646) and the Google Play feature graphic (android/feature-graphic.png, 1024 x 500)
-from the app icon and wordmark. Needs Pillow.
+they are wide, as raw Pixel screenshots are). `art` draws the App Store header
+(ios/app-store-header.png, 3840 x 1646) and the Google Play feature graphic
+(android/feature-graphic.png, 1024 x 500) from the app icon and wordmark. Needs Pillow.
 """
 
 import sys
