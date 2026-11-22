@@ -32,35 +32,42 @@ fi
 
 failed=()
 
+# Each language runs every one of its tools and fails if any of them did.
 run_python() {
+  local status=0
   if [[ $mode == fix ]]; then
-    ruff format .
-    ruff check --fix .
+    ruff format . || status=1
+    ruff check --fix . || status=1
   else
-    ruff format --check .
-    ruff check .
+    ruff format --check . || status=1
+    ruff check . || status=1
   fi
+  return $status
 }
 
 run_web() {
+  local status=0
   if [[ $mode == fix ]]; then
-    npx prettier --write --log-level warn .
-    npx eslint --fix .
+    npx prettier --write --log-level warn . || status=1
+    npx eslint --fix . || status=1
   else
-    npx prettier --check --log-level warn .
-    npx eslint .
+    npx prettier --check --log-level warn . || status=1
+    npx eslint . || status=1
   fi
+  return $status
 }
 
 run_shell() {
   local scripts
   mapfile -t scripts < <(git ls-files '*.sh')
+  local status=0
   if [[ $mode == fix ]]; then
-    shfmt --write "${scripts[@]}"
+    shfmt --write "${scripts[@]}" || status=1
   else
-    shfmt --diff "${scripts[@]}"
+    shfmt --diff "${scripts[@]}" || status=1
   fi
-  shellcheck "${scripts[@]}"
+  shellcheck "${scripts[@]}" || status=1
+  return $status
 }
 
 run_kotlin() {

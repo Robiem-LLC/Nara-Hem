@@ -73,9 +73,11 @@ FIELDS = (
 # whether this household could handle them (Amazon's name-free interaction).
 NAME_FREE = {"WhereIsIntent", "FindPhoneIntent", "NotifyArrivalIntent", "NotifyLeaveIntent"}
 
+
 def enabled():
     """Returns True if the server was started with Alexa allowed."""
     return os.environ.get(ENVIRONMENT, "").strip().lower() in ("1", "true", "yes")
+
 
 def store():
     """Returns the store skill's relay address and skill ID ({} if it isn't published). The
@@ -88,10 +90,12 @@ def store():
         return {}
     return {"relay": f"https://{parts.netloc}", "skill_id": skill}
 
+
 def challenge_for(verifier):
     """Returns the PKCE S256 challenge for a verifier."""
     hashed = hashlib.sha256(verifier.encode()).digest()
     return base64.urlsafe_b64encode(hashed).decode().rstrip("=")
+
 
 def client_allowed(fields):
     """Returns True for a sign-in request from the Nära Hem relay, with its return address and a
@@ -106,6 +110,7 @@ def client_allowed(fields):
         and len(fields.get("code_challenge", "")) == 43
     )
 
+
 def fulfil_answer(can, slots=None):
     """Returns the answer to Alexa's "could you handle this?" question: YES, MAYBE or NO, and for
     each slot whether its value is understood and can be acted on.
@@ -115,6 +120,7 @@ def fulfil_answer(can, slots=None):
         body["slots"] = slots
     return {"version": "1.0", "response": {"canFulfillIntent": body}}
 
+
 def say(text, end=True, attributes=None, link=False):
     """Returns an Alexa response that says text."""
     response = {"outputSpeech": {"type": "PlainText", "text": text}, "shouldEndSession": end}
@@ -123,6 +129,7 @@ def say(text, end=True, attributes=None, link=False):
     if link:
         response["card"] = {"type": "LinkAccount"}
     return {"version": "1.0", "sessionAttributes": attributes or {}, "response": response}
+
 
 def link_page(fields, error=""):
     """Returns the sign-in page the Alexa app shows while linking."""
@@ -153,6 +160,7 @@ def link_page(fields, error=""):
         "<button type=submit>Link to Alexa</button></form></main></body></html>",
         status_code=400 if error and not fields.get("redirect_uri") else 200,
     )
+
 
 def install(
     app,
