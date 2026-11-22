@@ -11,7 +11,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "apps/ios/ci/remote"))
-from build import bundle_version, decode_profile, validate_extension_profile, validate_profile
+from build import (
+    bundle_version,
+    decode_profile,
+    marketing_version,
+    validate_extension_profile,
+    validate_profile,
+)
 
 spec = importlib.util.spec_from_file_location(
     "wrapper", Path(__file__).resolve().parents[1] / "with-signing.py"
@@ -61,6 +67,14 @@ class SigningTests(unittest.TestCase):
             self.assertEqual(argv[1:6], ("cms", "-verify", "-noverify", "-binary", "-inform"))
             self.assertNotIn("security", argv)
             self.assertTrue(mocked.call_args.kwargs["capture"])
+
+    def test_the_version_comes_from_the_version_file(self):
+        self.assertRegex(marketing_version(), r"^[0-9]+\.[0-9]+\.[0-9]+$")
+        with tempfile.TemporaryDirectory() as folder:
+            bad = Path(folder) / "VERSION"
+            bad.write_text("1.0\n")
+            with self.assertRaises(ValueError):
+                marketing_version(bad)
 
     def test_bundle_versions_fit_apple_limits(self):
         for n in [0, 1, 10000, 34567890, 99989999]:

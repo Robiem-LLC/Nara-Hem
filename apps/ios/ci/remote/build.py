@@ -60,6 +60,14 @@ def decode_profile(path):
     )
 
 
+def marketing_version(path=ROOT.parents[1] / "VERSION"):
+    """Returns the version people see, from the repository's VERSION file, the same as Android's."""
+    version = Path(path).read_text().strip()
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+        raise ValueError("VERSION must look like 1.0.1")
+    return version
+
+
 def bundle_version(number):
     """Converts a CI run number to a valid CFBundleVersion."""
     number = int(number)
@@ -223,6 +231,7 @@ def main():
         if run("git", "status", "--porcelain", "--untracked-files=no", capture=True).strip():
             commit += "-dirty"
         app["base"]["NARAHEM_BUILD_COMMIT"] = commit
+        app["base"]["MARKETING_VERSION"] = marketing_version()
         app["base"]["CURRENT_PROJECT_VERSION"] = bundle_version(
             int(ENV.get("GITHUB_RUN_NUMBER", int(stamp.timestamp()) // 60)) + BUILD_OFFSET
         )
