@@ -21,7 +21,7 @@ ANDROID_PACKAGE = "com.robiem.narahem"
 TABS = ("Map", "Trips", "Places", "Settings")
 # Screenshots for the app stores (tools/showcase/store.py): chapter, and seconds into it to take
 # it, once the screen has settled.
-STORE_SHOTS = {"map": 10, "member": 5, "trip": 4, "places": 4, "live": 12}
+STORE_SHOTS = {"map": 10, "member": 5, "trip": 4, "places": 4}
 
 
 def chapters_from(marks, started):
@@ -491,9 +491,7 @@ def film_android(server, email, password, route, output, seconds_per_point=1.5):
         time.sleep(3)
         mark("live")
         phone.tap("Map")
-        time.sleep(12)
-        shot("live")
-        time.sleep(4)
+        time.sleep(16)
         mark("end")
     finally:
         stop.set()

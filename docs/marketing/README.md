@@ -6,8 +6,8 @@ What to upload to each store. Everything here is made by
 ## `ios/` (App Store Connect)
 
 - `app-store-header.png` (3840 × 1646): the Header Asset on the version page.
-- `screenshots/` (1320 × 2868): the 6.9" iPhone screenshots. Apple scales them down for smaller
-  iPhones.
+- `screenshots/` (1206 × 2622): the iPhone screenshots, for the required "iPhone with Dynamic
+  Island (medium display)" slot (6.1" and 6.3"). Apple scales them down for smaller iPhones.
 
 ## `android/` (Google Play Console)
 

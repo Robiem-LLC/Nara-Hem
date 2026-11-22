@@ -4,10 +4,10 @@
     python tools/showcase/store.py art OUTPUT_FOLDER
 
 `screenshots` reads the raw screenshots phones.py took while filming (PHONES_FOLDER/store)
-and puts each on a branded background under a headline, in ios/screenshots at 1320 x 2868
-(6.9" iPhone, which Apple scales down for smaller iPhones) and android/screenshots at
-1080 x 1920 (Google Play rejects images more than twice as tall as they are wide, as raw
-Pixel screenshots are). `art` draws the App Store header (ios/app-store-header.png,
+and puts each on a branded background under a headline, in ios/screenshots at 1206 x 2622
+(6.3" iPhone, the size App Store Connect requires, scaled down for smaller iPhones) and
+android/screenshots at 1080 x 1920 (Google Play rejects images more than twice as tall as
+they are wide, as raw Pixel screenshots are). `art` draws the App Store header (ios/app-store-header.png,
 3840 x 1646) and the Google Play feature graphic (android/feature-graphic.png, 1024 x 500)
 from the app icon and wordmark. Needs Pillow.
 """
@@ -49,11 +49,10 @@ SHOTS = (
     ("trip", "Every drive, start to finish", "Distance, top speed and the route"),
     ("trips", "Every drive, start to finish", "Distance, top speed and the route"),
     ("places", "Know when they get home", "Alerts when someone arrives or leaves a place"),
-    ("live", "Your server. Your data.", "Encrypted on the phone. No ads, no analytics."),
 )
 
 # Each platform's folder and the size of its store screenshots.
-SIZES = {"ios": (1320, 2868), "android": (1080, 1920)}
+SIZES = {"ios": (1206, 2622), "android": (1080, 1920)}
 
 
 def font(candidates, size):
