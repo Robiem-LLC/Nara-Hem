@@ -519,14 +519,6 @@ function textingCard(texting, user) {
     document.getElementById('remove-texting').hidden = false;
   }
   document.getElementById('check-texting').disabled = !texting.source;
-  // Name this server's own domains for Textbelt's link approval.
-  const domains = texting.link_domains ?? [];
-  if (domains.length) {
-    document.getElementById('texting-domains').textContent =
-      domains.length > 1
-        ? `${domains.slice(0, -1).join(', ')} and ${domains[domains.length - 1]}`
-        : domains[0];
-  }
   const refresh = async (message) => {
     textingOn = (await api('/api/setup')).texting;
     await dashboard(user);
@@ -1205,9 +1197,9 @@ function addAdminActions(row, actions, accountRevokes, account, user) {
       accountButton('Resend', 'secondary', {
         disable: false,
         action: async () => {
-          notice(
-            (await api('/api/enrollment/request', 'POST', { email: contactOf(account) })).message,
-          );
+          const sent = await api(`/api/accounts/${account.id}/invitation`, 'POST', {});
+          const problems = Object.values(sent.problems || {});
+          notice(problems.length ? problems.join(' ') : 'Invitation sent again.');
         },
       }),
     );

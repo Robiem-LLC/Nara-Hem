@@ -89,7 +89,7 @@ class SignInViewModel(
         session.update { it.copy(onboarding = "signin", message = message) }
     }
 
-    /** Asks the server to email a new invitation link. */
+    /** Asks the server for a new invitation link by email, or a code by text. */
     fun findInvitation(server: String, email: String) = work {
         validateServer(server)
         val message = accounts.requestEnrollment(server, email)
@@ -97,19 +97,24 @@ class SignInViewModel(
     }
 
     /** Completes an invitation and signs in. */
-    fun completeInvitation(server: String, token: String, username: String, password: String) =
-        work {
-            validateServer(server)
-            accounts.completeEnrollment(server, token, username, password)
-            session.update {
-                it.copy(
-                    onboarding = "signin",
-                    message = "Email confirmed. Sign in with your chosen password for a new " +
-                        "invitation, or your existing password for an existing account. " +
-                        "Device approval is a separate step."
-                )
-            }
+    fun completeInvitation(
+        server: String,
+        token: String,
+        username: String,
+        password: String,
+        contact: String = ""
+    ) = work {
+        validateServer(server)
+        accounts.completeEnrollment(server, token, username, password, contact)
+        session.update {
+            it.copy(
+                onboarding = "signin",
+                message = "Account confirmed. Sign in with your chosen password for a new " +
+                    "invitation, or your existing password for an existing account. " +
+                    "Device approval is a separate step."
+            )
         }
+    }
 
     /** Sends a request for the admin to invite this person. */
     fun requestInvitation(server: String, email: String, name: String, relationship: String) =

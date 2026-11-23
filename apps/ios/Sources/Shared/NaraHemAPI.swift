@@ -245,27 +245,32 @@ final class NaraHemAPI {
         }
     }
 
-    /// Asks the server to email a new invitation link.
+    /// Asks the server for a new invitation link by email, or a code by text.
     func requestInvite(server: String, contact: String) async throws -> String {
         try setServer(server)
         let result = try await publicRequest("/api/enrollment/request", payload: ["email": contact])
         return (result["message"] as? String) ?? "Check your invitation"
     }
 
-    /// Completes an invitation by setting the username and password.
-    func verifyInvite(server: String, code: String, username: String, password: String) async throws
-    {
+    /// Completes an invitation by setting the username and password. Takes the six-digit code
+    /// texted to the contact, or the email link or its token.
+    func verifyInvite(
+        server: String, contact: String, code: String, username: String, password: String
+    ) async throws {
         try setServer(server)
-        let token =
-            code.components(separatedBy: "#verify=").last?.components(separatedBy: "&").first
-            ?? code
-        _ = try await publicRequest(
-            "/api/enrollment/verify",
-            payload: [
-                "token": token,
-                "username": username.isEmpty ? NSNull() : username as Any,
-                "password": password.isEmpty ? NSNull() : password as Any,
-            ])
+        let entered = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        var payload: [String: Any] = [
+            "username": username.isEmpty ? NSNull() : username as Any,
+            "password": password.isEmpty ? NSNull() : password as Any,
+        ]
+        if entered.count == 6, entered.allSatisfy(\.isASCII), entered.allSatisfy(\.isNumber) {
+            payload["email"] = contact
+            payload["code"] = entered
+        } else {
+            let link = entered.components(separatedBy: "#verify=").last ?? entered
+            payload["token"] = link.components(separatedBy: "&").first ?? link
+        }
+        _ = try await publicRequest("/api/enrollment/verify", payload: payload)
     }
 
     /// Sends a request for the admin to invite this person.

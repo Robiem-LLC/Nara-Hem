@@ -149,18 +149,87 @@ class TextingTests(unittest.TestCase):
         self.assertEqual(invited.json()["channels"], ["text"])
         phone, message = self.texts.sent[-1]
         self.assertEqual(phone, KIM)
-        self.assertIn("Test household", message)
-        self.assertIn("phone=%2B14155550123", message)
+        # Textbelt refuses links it hasn't approved, so the text names the server instead.
+        self.assertEqual(
+            message,
+            "You have been invited to Test household family locator.\n"
+            "Please download Nära Hem (Nara Hem) off your devices official store.\n"
+            "Create your account using narahem.example.invalid and your phone number.",
+        )
+        # The app asks for a code, which comes by text.
+        asked = self.client.post("/api/enrollment/request", json={"email": "415-555-0123"})
+        self.assertEqual(asked.status_code, 202)
+        self.client.post("/api/mail/retry", json={})
+        self.assertEqual(self.texts.sent[-1][0], KIM)
+        code = re.fullmatch(r"Your Nära Hem verification code:\n(\d{6})", self.texts.sent[-1][1])
+        wrong = "000000" if code.group(1) != "000000" else "111111"
+        refused = self.client.post(
+            "/api/enrollment/verify",
+            json={"email": KIM, "code": wrong, "username": "kim", "password": PASSWORD},
+        )
+        self.assertEqual(refused.status_code, 400)
         verified = self.client.post(
             "/api/enrollment/verify",
-            json={"token": self.link(message), "username": "kim", "password": PASSWORD},
+            json={
+                "email": "(415) 555-0123",
+                "code": code.group(1),
+                "username": "kim",
+                "password": PASSWORD,
+            },
         )
         self.assertEqual(verified.status_code, 200, verified.text)
+        again = self.client.post(
+            "/api/enrollment/verify",
+            json={"email": KIM, "code": code.group(1), "username": "kim", "password": PASSWORD},
+        )
+        self.assertEqual(again.status_code, 400, "a code works once")
         self.client.post("/api/logout", json={})
         self.assertEqual(self.sign_in("415-555-0123").status_code, 200)
         session = self.client.get("/api/session").json()
         self.assertEqual(session["phone"], KIM)
         self.assertIsNone(session["email"])
+
+    def test_the_administrator_can_resend_the_invitation_text(self):
+        self.turn_on()
+        self.client.post("/api/invitations", json={"email": KIM})
+        pending = next(a for a in self.client.get("/api/accounts").json() if a["phone"] == KIM)
+        texts = len(self.texts.sent)
+        resent = self.client.post(f"/api/accounts/{pending['id']}/invitation", json={})
+        self.assertEqual(resent.status_code, 202, resent.text)
+        self.assertEqual(resent.json()["channels"], ["text"])
+        self.assertEqual(len(self.texts.sent), texts + 1)
+        self.assertIn("family locator", self.texts.sent[-1][1])
+        missing = self.client.post("/api/accounts/nobody/invitation", json={})
+        self.assertEqual(missing.status_code, 404)
+
+    def test_texted_codes_cannot_be_guessed(self):
+        self.turn_on()
+        self.client.post("/api/invitations", json={"email": KIM})
+        self.client.post("/api/enrollment/request", json={"email": KIM})
+        self.client.post("/api/mail/retry", json={})
+        code = re.search(r"code:\n(\d{6})$", self.texts.sent[-1][1]).group(1)
+        wrong = [
+            c for c in ("000000", "111111", "222222", "333333", "444444", "555555") if c != code
+        ]
+        attempt = {"email": KIM, "username": "kim", "password": PASSWORD}
+        for guess in wrong[:5]:
+            self.assertEqual(
+                self.client.post(
+                    "/api/enrollment/verify", json={**attempt, "code": guess}
+                ).status_code,
+                400,
+            )
+        # Five tries per number, whoever makes them; even the right code waits now.
+        blocked = self.client.post("/api/enrollment/verify", json={**attempt, "code": code})
+        self.assertEqual(blocked.status_code, 429)
+        # A code is six digits, and a token or a code is needed.
+        self.assertEqual(
+            self.client.post(
+                "/api/enrollment/verify", json={**attempt, "code": "12345"}
+            ).status_code,
+            422,
+        )
+        self.assertEqual(self.client.post("/api/enrollment/verify", json=attempt).status_code, 422)
 
     def test_an_email_invitation_can_also_be_texted(self):
         self.turn_on()
@@ -170,8 +239,9 @@ class TextingTests(unittest.TestCase):
         self.assertEqual(invited.json()["channels"], ["email", "text"])
         self.assertEqual(self.mail[-1][1], "kim@example.invalid")
         self.assertEqual(self.texts.sent[-1][0], KIM)
-        # One link in both, so either can be used.
-        self.assertEqual(self.link(self.mail[-1][3]), self.link(self.texts.sent[-1][1]))
+        # The email has the link; the text has none.
+        self.assertTrue(self.link(self.mail[-1][3]))
+        self.assertNotIn("http", self.texts.sent[-1][1])
         again = self.client.post("/api/invitations", json={"email": "4155550123"})
         self.assertEqual(again.status_code, 409)
         listed = {a["email"]: a for a in self.client.get("/api/accounts").json()}
@@ -208,14 +278,14 @@ class TextingTests(unittest.TestCase):
         self.assertIn(f"Server: {PUBLIC}", mail)
         self.assertIn("Email: kim@example.invalid", mail)
         text = self.texts.sent[-1][1]
-        self.assertIn(APP_LINKS["NARAHEM_IOS_APP_URL"], text)
-        self.assertIn(f"server {PUBLIC}", text)
-        with patch.dict(os.environ, {"NARAHEM_IOS_APP_URL": "none"}):
-            self.client.post("/api/invitations", json={"email": "(415) 555-0199"})
-        self.assertNotIn(APP_LINKS["NARAHEM_IOS_APP_URL"], self.texts.sent[-1][1])
-        self.assertIn("phone +14155550199", self.texts.sent[-1][1])
+        self.assertNotIn("http", text)
+        self.assertIn("official store", text)
+        self.assertIn("using narahem.example.invalid and your phone number", text)
+        # A household already called a family isn't a "family family".
+        self.assertIn("to The Lees family locator.", texting.invitation("The Lees family", PUBLIC))
+        self.assertIn("to The Lees family locator.", texting.invitation("The Lees", PUBLIC))
 
-    def test_password_reset_goes_to_both(self):
+    def test_password_reset_goes_by_email_only(self):
         self.turn_on()
         self.client.post("/api/invitations", json={"email": "kim@example.invalid", "phone": KIM})
         self.client.post(
@@ -225,9 +295,10 @@ class TextingTests(unittest.TestCase):
         mails, texts = len(self.mail), len(self.texts.sent)
         self.client.post("/api/password/forgot", json={"email": KIM})
         self.assertEqual(self.client.post("/api/mail/retry", json={}).status_code, 200)
-        self.assertEqual(len(self.texts.sent), texts + 1)
-        self.assertIn("#reset=", self.texts.sent[-1][1])
+        # The reset is a link, which Textbelt won't send, so it goes by email only.
+        self.assertEqual(len(self.texts.sent), texts)
         self.assertEqual(len(self.mail), mails + 1)
+        self.assertIn("#reset=", self.mail[-1][3])
         self.assertEqual(self.mail[-1][1], "kim@example.invalid")
 
     def test_texting_off_means_email_only(self):
@@ -243,7 +314,7 @@ class TextingTests(unittest.TestCase):
         self.turn_on()
         sent = self.client.post("/api/texting/test", json={"phone": KIM})
         self.assertEqual(sent.status_code, 200, sent.text)
-        self.assertIn(PUBLIC, self.texts.sent[-1][1])
+        self.assertNotIn("http", self.texts.sent[-1][1])
         self.assertEqual(sent.json()["quota"], 39)
         self.texts.refuse = "Sorry, URLs are not allowed for this key."
         refused = self.client.post("/api/texting/test", json={"phone": KIM})
@@ -317,13 +388,13 @@ class TextingTests(unittest.TestCase):
             "/api/account/contact", json={"value": "415 555 0123", "password": PASSWORD}
         )
         self.assertEqual(sent.json(), {"sent_to": "phone", "to": KIM})
-        code = re.search(r"code: (\d{6})", self.texts.sent[-1][1]).group(1)
+        code = re.search(r"code:\n(\d{6})$", self.texts.sent[-1][1]).group(1)
         for _ in range(5):
             self.client.post("/api/account/contact/verify", json={"code": "111111"})
         locked = self.client.post("/api/account/contact/verify", json={"code": code})
         self.assertEqual(locked.status_code, 429, "five wrong tries end the request")
         self.client.post("/api/account/contact", json={"value": KIM, "password": PASSWORD})
-        code = re.search(r"code: (\d{6})", self.texts.sent[-1][1]).group(1)
+        code = re.search(r"code:\n(\d{6})$", self.texts.sent[-1][1]).group(1)
         done = self.client.post("/api/account/contact/verify", json={"code": code})
         self.assertEqual(done.json()["phone"], KIM)
         self.client.post("/api/logout", json={})

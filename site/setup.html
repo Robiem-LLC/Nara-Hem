@@ -279,17 +279,12 @@
           <h2>Optional: text messages</h2>
           <p>
             With a <a href="https://textbelt.com">Textbelt</a> key, you can invite people by phone
-            number, and they can sign in with it and get their codes and reset links by text.
-            Without one, {{name}} uses email only.
+            number, and they can sign in with it and get their codes by text. Texts never contain
+            links: an invitation names your server, and the app texts a six-digit code to set up the
+            account. Password reset links go by email only. Without a key, {{name}} uses email only.
           </p>
           <ol>
-            <li>
-              Buy credit at Textbelt, then
-              <a href="https://textbelt.com/whitelist">request link sending</a> for your key,
-              listing your server's address, testflight.apple.com and github.com (and, once the apps
-              are in the stores, apps.apple.com and play.google.com). Invitations and reset links
-              won't send until Textbelt approves it. Shortened links aren't allowed.
-            </li>
+            <li>Buy credit at Textbelt. No link approval is needed.</li>
             <li>
               Enter the key in <strong>Admin settings</strong> under <strong>Text messages</strong>,
               or set <code>NARAHEM_TEXTBELT_KEY</code> on the server, which wins over the saved key.
@@ -299,7 +294,7 @@
               number too, and the invitation goes to both.
             </li>
           </ol>
-          <p>Phone numbers, codes and links pass through Textbelt.</p>
+          <p>Phone numbers, invitations and codes pass through Textbelt.</p>
         </section>
 
         <section id="google-maps">

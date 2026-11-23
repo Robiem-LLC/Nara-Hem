@@ -109,8 +109,7 @@ def install(
                 send_text(
                     db,
                     value,
-                    f"Nära Hem code: {code}. Enter it to use this number for your account. "
-                    f"It expires in {CODE_MINUTES} minutes.",
+                    texting.code_message(code),
                 )
         except (OSError, smtplib.SMTPException, texting.TextingError) as error:
             db.commit()

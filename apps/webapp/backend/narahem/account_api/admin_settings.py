@@ -243,15 +243,15 @@ def install(
     def test_text(
         body: TextTestInput, request: Request, auth=Depends(admin), db: Session = Depends(database)
     ):
-        """Sends a test text. It includes the server's address, so it also shows whether Textbelt
-        allows links from this server.
+        """Sends a test text. It has no links, like every text Nära Hem sends, since Textbelt only
+        sends links from domains it has approved.
         """
         rate(request, "texting-test", 5)
         try:
             send_text(
                 db,
                 texting.phone_number(body.phone),
-                f"Nära Hem: text messages from {public_url} are working.",
+                "Nära Hem: text messages from your household's server are working.",
             )
         except texting.TextingError as error:
             db.commit()

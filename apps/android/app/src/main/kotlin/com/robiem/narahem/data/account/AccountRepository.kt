@@ -43,14 +43,15 @@ interface AccountRepository {
         error("Invitation lookup is unavailable.")
 
     /**
-     * Completes enrollment from an emailed link by setting the username and password, then signs
-     * in.
+     * Completes enrollment from an emailed link, or the six-digit code texted to [contact], by
+     * setting the username and password.
      */
     suspend fun completeEnrollment(
         server: String,
         token: String,
         username: String,
-        password: String
+        password: String,
+        contact: String = ""
     ) {
         error("Enrollment is unavailable.")
     }

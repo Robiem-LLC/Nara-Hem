@@ -59,7 +59,8 @@ class SignInViewModelTest {
             server: String,
             token: String,
             username: String,
-            password: String
+            password: String,
+            contact: String
         ) {
             calls += "complete"
         }
@@ -140,7 +141,7 @@ class SignInViewModelTest {
         model.completeInvitation(server, "token", "sam", "password")
         advanceUntilIdle()
         assertEquals("signin", session.current.onboarding)
-        assertTrue(session.current.message.startsWith("Email confirmed."))
+        assertTrue(session.current.message.startsWith("Account confirmed."))
         model.claimInvitation(server, "sam@example.invalid", "sam", "password")
         advanceUntilIdle()
         assertEquals("Use the emailed link.", session.current.message)

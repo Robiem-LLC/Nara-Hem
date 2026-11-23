@@ -673,14 +673,15 @@ def create_app(
             )
         )
 
-    def notify(db, account, key, subject, email_body, text_body):
-        """Queues the message by email and by text, wherever the account can be reached. Older
-        pending messages under the same key are dropped. Returns the channels used.
+    def notify(db, account, key, subject, email_body, text_body, only=None):
+        """Queues the message by email and by text (or only the channels named), wherever the
+        account can be reached. Older pending messages under the same key are dropped. Returns
+        the channels used.
         """
         db.query(Outbox).filter_by(account_id=key, status="pending").update(
             {Outbox.status: "expired", Outbox.payload: ""}
         )
-        used = channels(db, account)
+        used = [c for c in channels(db, account) if only is None or c in only]
         for channel in used:
             payload = {
                 "channel": channel,
@@ -741,9 +742,11 @@ def create_app(
             settings.sms_error = str(error)
             raise error from None
 
-    def queue(db, account):
-        """Queues an invitation with a new verification link, by email and by text wherever the
-        account can be reached. Returns the channels used.
+    def queue(db, account, text=True):
+        """Queues an invitation with a new verification link by email, and the invitation by
+        text (without text, by email only), wherever the account can be reached. The text has no
+        link: it names the server, and the app has a code texted with text_code(). Returns the
+        channels used.
         """
         db.query(Challenge).filter_by(account_id=account.id, used=False).delete()
         token = secrets.token_urlsafe(32)
@@ -766,11 +769,6 @@ def create_app(
             if line
         )
         get_app = f"2. Get the Nära Hem app:\n{apps}\n\n" if apps else ""
-        text_apps = " ".join(
-            part
-            for part in (f"iPhone: {ios}" if ios else "", f"Android: {android}" if android else "")
-            if part
-        )
         return notify(
             db,
             account,
@@ -786,22 +784,44 @@ def create_app(
                 "  Password: the one you choose in step 1\n\n"
                 "Setting up your account doesn't approve a phone or share anyone's location."
             ),
-            f"You're invited to {household} on Nära Hem. Set up your account within 30 minutes: "
-            f"{link} "
-            + (f"Get the app: {text_apps} " if text_apps else "")
-            + f"Then sign in with server {public_url} and "
-            + (f"email {account.email}." if account.email else f"phone {account.phone}."),
+            texting.invitation(db.get(Settings, 1).household or "", public_url),
+            only=None if text else ("email",),
         )
 
+    def text_code(db, account):
+        """Texts a six-digit code that sets up an invited account in the app, standing in for
+        the email link, which a text can't carry. Returns True if one was queued.
+        """
+        if not account.phone or not texting_on(db):
+            return False
+        code = f"{secrets.randbelow(1000000):06d}"
+        db.add(
+            Challenge(
+                id=digest(f"code:{account.id}:{code}"),
+                account_id=account.id,
+                expires=time.time() + 1800,
+            )
+        )
+        notify(
+            db,
+            account,
+            "c:" + account.id,
+            "Nära Hem verification code",
+            "",
+            texting.code_message(code),
+            only=("text",),
+        )
+        return True
+
     def issue_password_reset(db, account):
-        """Queues a password reset link to the account's own email and phone. The link is never
-        returned to the caller.
+        """Queues a password reset link to the account's own email. The link is never returned
+        to the caller. It isn't texted: Textbelt only sends links from domains it has approved.
         """
         if (
             not account
             or account.status != "active"
             or not account.password
-            or not channels(db, account)
+            or "email" not in channels(db, account)
         ):
             return False
         db.query(PasswordReset).filter_by(account_id=account.id).delete(synchronize_session=False)
@@ -819,8 +839,8 @@ def create_app(
                 "If you did not request it, ignore this email.\n"
                 "This does not change your encrypted device keys."
             ),
-            f"Nära Hem password reset, valid for 30 minutes: {link} "
-            "If you didn't ask for it, ignore this text.",
+            "",
+            only=("email",),
         )
         return True
 
@@ -937,7 +957,9 @@ def create_app(
         texting_on=texting_on,
     )
 
-    enrollment.install(app, admin=admin, database=database, queue=queue, rate=rate)
+    enrollment.install(
+        app, admin=admin, database=database, queue=queue, rate=rate, text_code=text_code
+    )
 
     revocation.install(app, admin=admin, database=database)
 

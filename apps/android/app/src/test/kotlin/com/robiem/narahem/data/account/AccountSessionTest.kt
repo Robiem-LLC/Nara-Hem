@@ -15,6 +15,7 @@ import okhttp3.tls.HeldCertificate
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -184,6 +185,13 @@ class AccountSessionTest {
         val verify = JSONObject(server.takeRequest().body.readUtf8())
         assertEquals("t".repeat(30), verify.getString("token"))
         assertTrue(verify.isNull("username"))
+        // A texted code goes with the phone number it was sent to.
+        reply("{}")
+        repo.completeEnrollment(address, " 123456 ", "sam", "p".repeat(20), "+14155550123")
+        val coded = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("123456", coded.getString("code"))
+        assertEquals("+14155550123", coded.getString("email"))
+        assertFalse(coded.has("token"))
     }
 
     @Test fun authenticatedRequestsCanUsePut() = runBlocking<Unit> {

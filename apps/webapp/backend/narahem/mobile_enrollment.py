@@ -19,7 +19,7 @@ from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from narahem import review_mode
+from narahem import review_mode, texting
 from narahem.app import digest, secret_file
 from narahem.data_service import audit, canonical, identity
 from narahem.models import (
@@ -313,8 +313,7 @@ def install(
                 f"Enter {code} in the Nära Hem app to register this phone.\n"
                 "It expires in 10 minutes. If you didn't request this, "
                 "change your password and contact your administrator.",
-                f"Nära Hem code: {code}. Enter it in the app to register this phone. "
-                "It expires in 10 minutes.",
+                texting.code_message(code),
             )
         challenge = db.get(PhoneChallenge, device.id)
         if not challenge:

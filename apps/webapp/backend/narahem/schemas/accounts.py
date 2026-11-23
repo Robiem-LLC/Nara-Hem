@@ -76,9 +76,13 @@ class ClaimInput(Input):
 
 
 class VerifyInput(Input):
-    """Email verification token, with an optional username and password for new members."""
+    """Email verification token, or the invited email address or phone number with the six-digit
+    code texted to it, with an optional username and password for new members.
+    """
 
-    token: str = Field(min_length=20, max_length=128)
+    token: str | None = Field(default=None, min_length=20, max_length=128)
+    email: str | None = Field(default=None, min_length=3, max_length=254)
+    code: str | None = Field(default=None, pattern=r"^[0-9]{6}$")
     username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str | None = Field(default=None, min_length=15, max_length=128)
 

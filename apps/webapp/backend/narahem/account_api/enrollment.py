@@ -26,7 +26,7 @@ from narahem.schemas import (
 )
 
 
-def install(app, *, admin, database, queue, rate):
+def install(app, *, admin, database, queue, rate, text_code):
     """Registers this module's routes. The keyword arguments are shared helpers from
     create_app().
     """
@@ -108,8 +108,8 @@ def install(app, *, admin, database, queue, rate):
 
     @app.post("/api/enrollment/request", status_code=202)
     def request_enrollment(body: EmailInput, request: Request, db: Session = Depends(database)):
-        """Sends a new enrollment link to an invited email address or phone number, by email and
-        text where the account has them. Returns the same response whether or not it exists.
+        """Sends an invited email address a new enrollment link, and an invited phone number a
+        six-digit code to enter in the app. Returns the same response whether or not it exists.
         """
         rate(request, "enrollment", 5)
         account = find_account(db, body.email)
@@ -118,26 +118,41 @@ def install(app, *, admin, database, queue, rate):
             and account.status != "revoked"
             and (account.status == "pending" or not account.verified)
         ):
-            queue(db, account)
+            queue(db, account, text=False)
+            text_code(db, account)
             db.commit()
-        return {"message": "If eligible, a confirmation link will be sent."}
+        return {"message": "If you're invited, a code or link is on its way."}
 
     @app.post("/api/enrollment/verify")
     def verify(body: VerifyInput, request: Request, db: Session = Depends(database)):
-        """Handles an email verification link: confirms the address and, for new members, sets
-        the username and password.
+        """Handles an email verification link, or a code texted to an invited phone number:
+        confirms the address and, for new members, sets the username and password.
         """
         rate(request, "verify", 10)
-        challenge = db.execute(
-            select(Challenge).where(Challenge.id == digest(body.token)).with_for_update()
-        ).scalar_one_or_none()
+        if body.token:
+            key = digest(body.token)
+        elif body.email and body.code:
+            invited = find_account(db, body.email)
+            # Six digits are few, so each account gets five tries per window wherever they
+            # come from.
+            rate(request, "verify-code:" + digest(body.email.strip().lower()), 5, shared=True)
+            key = digest(f"code:{invited.id}:{body.code}") if invited else None
+        else:
+            raise HTTPException(422, "Enter the code you were sent")
+        challenge = (
+            db.execute(
+                select(Challenge).where(Challenge.id == key).with_for_update()
+            ).scalar_one_or_none()
+            if key
+            else None
+        )
         if not challenge or challenge.used or challenge.expires <= time.time():
-            raise HTTPException(400, "Confirmation link is invalid or expired")
+            raise HTTPException(400, "That code or link is invalid or expired")
         account = db.execute(
             select(Account).where(Account.id == challenge.account_id).with_for_update()
         ).scalar_one()
         if account.status == "revoked":
-            raise HTTPException(400, "Confirmation link is invalid or expired")
+            raise HTTPException(400, "That code or link is invalid or expired")
         if account.status == "pending":
             if not body.password:
                 raise HTTPException(422, "Choose and confirm a password")

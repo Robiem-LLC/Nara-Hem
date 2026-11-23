@@ -142,7 +142,7 @@
         }
 
         func verifyInvite(
-            server: String, code: String, username: String, password: String
+            server: String, contact: String, code: String, username: String, password: String
         ) async throws {
             calls.append("verifyInvite")
         }

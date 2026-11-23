@@ -175,6 +175,23 @@ def install(
             )
         }
 
+    @app.post("/api/accounts/{account_id}/invitation", status_code=202)
+    def resend_invitation(
+        account_id: str, request: Request, auth=Depends(admin), db: Session = Depends(database)
+    ):
+        """Sends a pending member their invitation again: the email link and the text."""
+        rate(request, "invite", 20)
+        account = db.get(Account, account_id)
+        if not account or account.status != "pending":
+            raise HTTPException(404, "No pending invitation for this member")
+        sent_to = queue(db, account)
+        db.commit()
+        if not sent_to:
+            raise HTTPException(409, "Set up email or text messages to send invitations")
+        result = flush_mail(db)
+        problems = result.pop("failed", {}).get(account.id, {})
+        return {"channels": sent_to, **result, "problems": problems}
+
     @app.post("/api/accounts/{account_id}/password-reset", status_code=202)
     def admin_send_password_reset(
         account_id: str, request: Request, auth=Depends(admin), db: Session = Depends(database)

@@ -118,7 +118,7 @@ class PhoneEnrollmentTests(unittest.TestCase):
             self.assertEqual(len(self.messages), mails, "no email for a phone-only member")
             phone, message = texts[-1]
             self.assertEqual(phone, "+14155550123")
-            code = message.split("code: ")[1][:6]
+            code = message.split("code:\n")[1][:6]
             reply = client.post("/api/phones/verify", json={"device_id": device, "code": code})
             self.assertEqual(reply.status_code, 200, reply.text)
 

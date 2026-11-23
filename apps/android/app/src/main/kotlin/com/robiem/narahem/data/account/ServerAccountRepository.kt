@@ -277,25 +277,27 @@ class ServerAccountRepository(
         ).getString("message")
     }
 
-    /** Extracts the token from the pasted link, sets the username and password, and signs in. */
+    /**
+     * Takes the six-digit code texted to [contact], or extracts the token from the pasted email
+     * link, then sets the username and password.
+     */
     override suspend fun completeEnrollment(
         server: String,
         token: String,
         username: String,
-        password: String
+        password: String,
+        contact: String
     ) {
         val entered = token.trim()
+        val code = entered.takeIf { it.matches(Regex("[0-9]{6}")) }
         val extracted = if ("#verify=" in entered) {
             entered.substringAfter("#verify=").substringBefore("&")
         } else {
             entered
         }
-        if (extracted.length !in 20..128) {
-            throw AccountRequestException(
-                0,
-                "Paste the confirmation link or token from your email.",
-                mapOf("token" to "Paste the confirmation link or token from your email.")
-            )
+        if (code == null && extracted.length !in 20..128) {
+            val problem = "Enter the code from your text, or paste the link from your email."
+            throw AccountRequestException(0, problem, mapOf("token" to problem))
         }
         if (username.isNotEmpty() && !username.matches(Regex("[a-zA-Z0-9_.-]{3,64}"))) {
             throw AccountRequestException(
@@ -311,17 +313,19 @@ class ServerAccountRepository(
                 mapOf("password" to "Choose a password with 15–128 characters.")
             )
         }
-        request(
-            serverOrigin(server),
-            "/api/enrollment/verify",
-            JSONObject().put("token", extracted).put(
-                "username",
-                username.ifEmpty { null } ?: JSONObject.NULL
-            ).put(
-                "password",
-                password.ifEmpty { null } ?: JSONObject.NULL
-            )
+        val body = JSONObject().put(
+            "username",
+            username.ifEmpty { null } ?: JSONObject.NULL
+        ).put(
+            "password",
+            password.ifEmpty { null } ?: JSONObject.NULL
         )
+        if (code != null) {
+            body.put("email", contact.trim()).put("code", code)
+        } else {
+            body.put("token", extracted)
+        }
+        request(serverOrigin(server), "/api/enrollment/verify", body)
     }
 
     /** Validates and submits an invitation request. */

@@ -48,7 +48,8 @@ internal fun SignInScreen(state: AppState, form: SignInForm, model: SignInViewMo
                 form.server,
                 form.confirmation,
                 form.chosenUsername,
-                form.password
+                form.password,
+                form.email
             )
         },
         onRequestInvitation = {
@@ -121,18 +122,17 @@ internal fun SignInContent(
             when (state.onboarding) {
                 "claim" -> {
                     Text(
-                        "Invited members confirm their email and choose " +
-                            "a password using the invitation link. No " +
-                            "additional administrator approval."
+                        "Invited by text? Get a code sent to your phone number. Invited by " +
+                            "email? Use the link in the invitation, or have it sent again."
                     )
                     Button(onClick = {
                         onResendInvitation()
                     }, enabled = !state.busy) {
-                        Text("Resend invitation email")
+                        Text("Send me a code")
                     }
                     TextButton(onClick = {
                         onShow("enroll")
-                    }) { Text("Enter invitation link") }
+                    }) { Text("Enter code or link") }
                     TextButton(onClick = {
                         onShow("signin")
                     }) { Text("Back to sign-in") }
@@ -141,12 +141,12 @@ internal fun SignInContent(
                 "enroll" -> {
                     Text(
                         "Choose your display username and password. Your " +
-                            "email remains your login and recovery address."
+                            "email or phone number remains your login."
                     )
                     OutlinedTextField(form.confirmation, {
                         form.confirmation = it
                     }, label = {
-                        Text("Email link or token")
+                        Text("Code from your text, or link from your email")
                     }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(
                         form.chosenUsername,
@@ -186,7 +186,7 @@ internal fun SignInContent(
                     }
                     TextButton(onClick = {
                         onShow("claim")
-                    }, enabled = !state.busy) { Text("Resend invitation") }
+                    }, enabled = !state.busy) { Text("Send another code") }
                     TextButton(onClick = {
                         onShow("request")
                     }, enabled = !state.busy) { Text("Request access") }

@@ -41,6 +41,25 @@ def phone_number(value):
     return digits
 
 
+def invitation(household, public_url):
+    """Returns the invitation text. Textbelt only sends links from domains it has approved, so
+    it names the server's address rather than linking to it, and the app texts a code instead.
+    """
+    name = household.strip() or "a Nära Hem"
+    if not name.lower().endswith("family"):
+        name += " family"
+    return (
+        f"You have been invited to {name} locator.\n"
+        "Please download Nära Hem (Nara Hem) off your devices official store.\n"
+        f"Create your account using {urlsplit(public_url).netloc} and your phone number."
+    )
+
+
+def code_message(code):
+    """Returns the text that carries a six-digit code."""
+    return f"Your Nära Hem verification code:\n{code}"
+
+
 def looks_like_phone(value):
     """Returns True if the value is meant as a phone number rather than an email address."""
     return "@" not in value and bool(re.fullmatch(r"[\s()+0-9.-]{7,24}", value.strip()))

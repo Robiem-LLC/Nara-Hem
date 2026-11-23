@@ -69,21 +69,13 @@ original `Host` header.
 **Admin settings → Email → Send test.** Many providers need an app password rather than your normal
 one. Check the spam folder too.
 
-## Texts with links are refused
+## Texts and links
 
-Textbelt only sends links once your key is approved for them. Request it at
-[textbelt.com/whitelist](https://textbelt.com/whitelist): describe the use (invitations and sign-in
-links for your household's own server) and list the domains your texts link to:
-
-- your own server's domain, the one in `NARAHEM_PUBLIC_URL`, e.g. `family.example.com`;
-- `testflight.apple.com` and `github.com`, the app downloads in invitations;
-- once the apps are in the stores, `apps.apple.com` and `play.google.com`.
-
-**Admin settings → Text messages** lists exactly these for your server, and so does the message
-shown when Textbelt refuses a text.
-
-Shortened links (bit.ly, TinyURL) are never allowed. Once approved, **Admin settings → Text
-messages → Send test text** confirms links get through.
+Textbelt only sends links from domains it has approved, so Nära Hem's texts never contain any. An
+invitation text names your server's address and says to get the app from the phone's store; in
+the app, **Set up invited account → Send me a code** texts a six-digit code that sets up the
+account. Password reset links go by email only, so a member with only a phone number can't reset
+their password by text yet. **Admin settings → Text messages → Send test text** checks the key.
 
 ## No notifications on phones
 

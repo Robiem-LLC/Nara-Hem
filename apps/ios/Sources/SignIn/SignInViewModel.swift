@@ -64,7 +64,7 @@ final class SignInViewModel {
         }
     }
 
-    /// Asks the server to email a new invitation link.
+    /// Asks the server for a new invitation link by email, or a code by text.
     func requestInvite() {
         session.work {
             self.session.message = try await self.accounts.requestInvite(
@@ -76,7 +76,7 @@ final class SignInViewModel {
     func verifyInvite() {
         session.work {
             try await self.accounts.verifyInvite(
-                server: self.session.server, code: self.invitationCode,
+                server: self.session.server, contact: self.contact, code: self.invitationCode,
                 username: self.enrollmentUsername, password: self.enrollmentPassword)
             self.session.message = "Invitation verified. Sign in and approve this device."
         }

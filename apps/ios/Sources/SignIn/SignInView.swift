@@ -46,15 +46,17 @@ struct SignInView: View {
                         .padding(16).background(panel, in: RoundedRectangle(cornerRadius: 9))
                     SecureField("Confirm password", text: $model.enrollmentConfirmPassword)
                         .padding(16).background(panel, in: RoundedRectangle(cornerRadius: 9))
-                    Button("Resend invitation email") { model.requestInvite() }
-                    loginField("Confirmation link or token", text: $model.invitationCode)
+                    Button("Send me a code") { model.requestInvite() }
+                    loginField(
+                        "Code from your text, or link from your email", text: $model.invitationCode)
                     Button("Confirm invitation") {
                         model.verifyInvite()
                     }.disabled(!model.canConfirmInvitation)
                     Text(
                         """
-                        Your email is used for login and recovery. Your username is the name \
-                        your household sees. After confirming, verify this iPhone by email.
+                        Your email or phone number is used for login. Your username is the name \
+                        your household sees. After confirming, verify this iPhone with the code \
+                        you're sent.
                         """
                     )
                     .font(.caption).foregroundStyle(subdued)
