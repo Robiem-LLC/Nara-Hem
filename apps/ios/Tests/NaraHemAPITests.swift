@@ -102,10 +102,16 @@ final class NaraHemAPITests: XCTestCase {
 
     func testUsernamesAreCheckedThenSaved() async throws {
         _ = try await api.signIn(server: address, identifier: "sam", password: "pw")
-        let invalid = await message { _ = try await self.api.updateUsername("x") }
-        XCTAssertEqual(invalid, "Use 3–64 letters, numbers, periods, dashes or underscores.")
+        let rule = "Use one or two words: 3–64 letters, numbers, periods, dashes or apostrophes."
+        for name in ["x", "John Q Doe"] {
+            let invalid = await message { _ = try await self.api.updateUsername(name) }
+            XCTAssertEqual(invalid, rule)
+        }
         let saved = try await api.updateUsername(" sam.lee ")
         XCTAssertEqual(saved, "sam.lee")
+        // Two words are fine, with the spaces between them tidied.
+        let named = try await api.updateUsername("  John   Doe ")
+        XCTAssertEqual(named, "John Doe")
     }
 
     func testSignOutRevokesTheSessionAndForgetsIt() async throws {
