@@ -165,7 +165,12 @@ class PhoneEnrollmentTests(unittest.TestCase):
             member = self.signed_in("415-555-0123")
             me = member.get("/api/session").json()
             self.assertEqual((me["username"], me["verified"]), ("John Doe", False))
-            device, _ = self.register_phone(member, me["id"])
+            device, credential = self.register_phone(member, me["id"])
+            # The waiting phone can see where it stands, but not the household.
+            bearer = {"Authorization": f"Bearer {credential}"}
+            own = member.get("/api/device", headers=bearer)
+            self.assertEqual((own.status_code, own.json()["status"]), (200, "pending"), own.text)
+            self.assertEqual(member.get("/api/roster", headers=bearer).status_code, 401)
             self.assertEqual(
                 member.post("/api/phones/code", json={"device_id": device}).status_code, 202
             )

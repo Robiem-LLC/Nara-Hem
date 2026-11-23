@@ -89,6 +89,17 @@ def install(
         """Returns the device identified by the bearer token, in any status. Also updates its
         last-seen time, at most once a minute.
         """
+        return device_for(request, db)
+
+    def own_credential(request: Request, db: Session = Depends(database)):
+        """Like credential(), but also accepts a pending phone of an account registered in the
+        app and not yet confirmed, so the phone can see where it stands while it waits for the
+        code. Only the phone's own status uses it; nothing of the household does.
+        """
+        return device_for(request, db, unconfirmed_phone=True)
+
+    def device_for(request, db, unconfirmed_phone=False):
+        """Returns the device identified by the bearer token, raising a 401 unless it may act."""
         header = request.headers.get("authorization", "")
         if not header.startswith("Bearer ") or len(header) > 200:
             raise HTTPException(401, "Device credential required")
@@ -96,12 +107,18 @@ def install(
             select(ClientDevice).where(ClientDevice.credential == digest(header[7:]))
         )
         account = db.get(Account, device.account_id) if device else None
+        waiting = (
+            unconfirmed_phone
+            and device is not None
+            and device.status == "pending"
+            and json.loads(device.registration).get("platform") in ("ios", "android")
+        )
         if (
             not device
             or device.status == "revoked"
             or not account
             or account.status != "active"
-            or not account_trusted(account, db)
+            or not (account_trusted(account, db) or waiting)
         ):
             raise HTTPException(401, "Device credential not accepted")
         if time.time() - (device.seen or 0) > 60:
@@ -587,6 +604,7 @@ def install(
         credential=credential,
         current=current,
         database=database,
+        own_credential=own_credential,
         rate=rate,
         trip_processor=trip_processor,
         verified=verified,

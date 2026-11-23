@@ -31,7 +31,7 @@ from narahem.schemas import (
 )
 
 
-def install(app, *, credential, current, database, rate, trip_processor, verified):
+def install(app, *, credential, current, database, own_credential, rate, trip_processor, verified):
     """Registers this module's routes. The keyword arguments are shared helpers from
     device_api.install().
     """
@@ -248,7 +248,7 @@ def install(app, *, credential, current, database, rate, trip_processor, verifie
         }
 
     @app.get("/api/device")
-    def own_device(device=Depends(credential), db: Session = Depends(database)):
+    def own_device(device=Depends(own_credential), db: Session = Depends(database)):
         """Returns the requesting device's status, including its phone enrollment state."""
         slot = mobile_slot(db, device.account_id, exclude=device.id)
         return {
