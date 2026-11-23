@@ -87,6 +87,8 @@ class Family:
         self.saved.setdefault("members", {})
         self.saved.setdefault("routes", {})
         self.phones, self.driving = {}, None
+        # When the family last looked for members to share with; see wait().
+        self.shared_at = 0.0
 
     def save(self):
         """Writes the state file, readable only by this container."""
@@ -262,16 +264,20 @@ class Family:
         self.save()
 
     def wait(self, seconds):
-        """Waits, while the members who aren't driving check in every ten minutes."""
+        """Waits, while the family shares with anyone new every minute and the members who
+        aren't driving check in every ten minutes. Drives wait here too.
+        """
         deadline = time.time() + seconds
         while time.time() < deadline:
             time.sleep(min(5, max(0, deadline - time.time())))
-            if time.time() - self.saved.get("checked_in", 0) > 600:
-                self.saved["checked_in"] = time.time()
+            if time.time() - self.shared_at > 60:
+                self.shared_at = time.time()
                 try:
                     self.share_with_everyone()
                 except (RuntimeError, httpx.HTTPError) as error:
                     say(str(error))
+            if time.time() - self.saved.get("checked_in", 0) > 600:
+                self.saved["checked_in"] = time.time()
                 for name in [n for n in MEMBERS if n != self.driving]:
                     try:
                         self.park(name)
