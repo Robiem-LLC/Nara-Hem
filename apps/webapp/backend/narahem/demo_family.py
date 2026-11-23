@@ -140,6 +140,21 @@ class Family:
         with Session(self.server.engine) as db:
             return db.scalar(select(Account.id).where(Account.role == "admin"))
 
+    def everyone(self):
+        """Returns every active account: the administrator, the reviewers and the family. A
+        reviewer added later, such as a second store's, is shared with like a new member is.
+        """
+        with Session(self.server.engine) as db:
+            return set(db.scalars(select(Account.id).where(Account.status == "active")))
+
+    def share_with_everyone(self):
+        """Has each phone share with every other active account, if that has changed."""
+        accounts = self.everyone()
+        for phone in self.phones.values():
+            viewers = accounts - {phone.account_id}
+            if viewers != phone.viewers:
+                phone.share_with(viewers)
+
     def phone(self, name):
         """Restores the member's phone, or enrolls a new one."""
         platform, places = MEMBERS[name]
@@ -186,11 +201,8 @@ class Family:
         """
         self.account(self.reviewer, "Sam", self.password)
         self.phones = {name: self.phone(name) for name in MEMBERS}
-        with Session(self.server.engine) as db:
-            family = [db.scalar(select(Account.id).where(Account.email == self.reviewer))]
-        family += [phone.account_id for phone in self.phones.values()]
+        self.share_with_everyone()
         for name, phone in self.phones.items():
-            phone.share_with([self.owner()] + [a for a in family if a != phone.account_id])
             if self.saved["members"][name].pop("new", False):
                 phone.profile(PHOTOS[name])
         if not self.saved.get("places"):
@@ -256,6 +268,10 @@ class Family:
             time.sleep(min(5, max(0, deadline - time.time())))
             if time.time() - self.saved.get("checked_in", 0) > 600:
                 self.saved["checked_in"] = time.time()
+                try:
+                    self.share_with_everyone()
+                except (RuntimeError, httpx.HTTPError) as error:
+                    say(str(error))
                 for name in [n for n in MEMBERS if n != self.driving]:
                     try:
                         self.park(name)

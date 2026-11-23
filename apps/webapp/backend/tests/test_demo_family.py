@@ -125,3 +125,23 @@ class DemoFamilyTests(unittest.TestCase):
         listed = reply.json()["trips"]
         made = sum(1 for trip in demo_family.HISTORY if trip[0] == "Maya")
         self.assertGreaterEqual(len(listed), made, "the reviewer sees the family's trips")
+
+        # A second store's reviewer, added later, is shared with at the next check-in.
+        google = again.account(
+            "google@" + demo_family.DOMAIN, "Play Review", "another long password"
+        )
+        again.share_with_everyone()
+        for name in demo_family.MEMBERS:
+            again.park(name)
+        second, _ = DemoPhone.enroll(
+            server,
+            google,
+            "Play Review",
+            "google@" + demo_family.DOMAIN,
+            "another long password",
+            "246810",
+            "android",
+        )
+        view = second.device.get("/api/view").json()["records"]
+        seen = {r["entity_id"] for r in view if r["kind"] == "location"}
+        self.assertEqual(seen, {p.account_id for p in again.phones.values()})
