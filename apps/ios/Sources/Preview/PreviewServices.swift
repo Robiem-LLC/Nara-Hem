@@ -137,9 +137,9 @@
             [:]
         }
 
-        func register(server: String, contact: String, username: String, password: String)
-            async throws
-        {
+        func register(
+            server: String, contact: String, username: String, password: String
+        ) async throws {
             calls.append("register")
         }
 

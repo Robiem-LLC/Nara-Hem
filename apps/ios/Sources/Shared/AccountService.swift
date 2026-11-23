@@ -18,8 +18,7 @@ protocol AccountService: AnyObject {
 
     /// Registers the account invited at this email address or phone number with a username and
     /// password. It stays unconfirmed until the code sent when approving this phone.
-    func register(server: String, contact: String, username: String, password: String)
-        async throws
+    func register(server: String, contact: String, username: String, password: String) async throws
 
     /// Sends a request as the signed-in account.
     func accountRequest(
