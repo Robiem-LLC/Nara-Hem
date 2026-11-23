@@ -30,10 +30,16 @@ final class ViewModelTests: XCTestCase {
         model.enrollmentPassword = "a long synthetic password"
         model.enrollmentConfirmPassword = "something else"
         XCTAssertFalse(model.canRegister)
+        XCTAssertEqual(model.registrationProblem, "The two passwords don't match.")
         model.enrollmentConfirmPassword = model.enrollmentPassword
         XCTAssertTrue(model.canRegister)
+        XCTAssertNil(model.registrationProblem)
         model.enrollmentUsername = " s "
         XCTAssertFalse(model.canRegister)
+        XCTAssertEqual(model.registrationProblem, "Enter your name, at least 3 characters.")
+        model.enrollmentUsername = "Sam"
+        model.enrollmentPassword = "short"
+        XCTAssertEqual(model.registrationProblem, "Password needs 15+ characters (5 so far).")
     }
 
     func testMapUsesSharedLocationsAndShowsTheLocalMarkerUntilOwnLocationArrives() {

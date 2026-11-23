@@ -88,12 +88,16 @@ class SignInFlowTest {
         showsPasswordStep()
         click("Register new account")
         compose.onNodeWithText("Create account").assertIsNotEnabled()
+        compose.onNodeWithText("Enter your name, at least 3 characters.").assertExists()
         type("Your name (one or two words)", "John Doe")
-        type("Password (15+ characters)", "synthetic long password")
-        type("Verify password", "synthetic long password")
+        type("Password (15+ characters)", "too short")
+        compose.onNodeWithText("Password needs 15+ characters (9 so far).").assertExists()
+        type("Password (15+ characters)", " but now long")
+        type("Verify password", "too short but now long")
         compose.onNodeWithText("Create account").assertIsEnabled()
         type("Verify password", "!")
         compose.onNodeWithText("Create account").assertIsNotEnabled()
+        compose.onNodeWithText("The two passwords don't match.").assertExists()
     }
 
     @Test

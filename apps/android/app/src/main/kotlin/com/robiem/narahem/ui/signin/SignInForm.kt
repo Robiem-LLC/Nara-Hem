@@ -24,6 +24,16 @@ class SignInForm(server: String = "", confirmation: String = "") {
     var requestName by mutableStateOf("")
     var relationship by mutableStateOf("")
 
+    /** Returns what still stops registering, such as a short password, or null when ready. */
+    fun registrationProblem(): String? = when {
+        server.isBlank() -> "Enter the server address at the top."
+        email.isBlank() -> "Enter the email or phone number you were invited with, at the top."
+        chosenUsername.trim().length < 3 -> "Enter your name, at least 3 characters."
+        password.length < 15 -> "Password needs 15+ characters (${password.length} so far)."
+        password != passwordConfirmation -> "The two passwords don't match."
+        else -> null
+    }
+
     /** State saver. */
     companion object {
         /** Passwords are never written to the saved screen state. */

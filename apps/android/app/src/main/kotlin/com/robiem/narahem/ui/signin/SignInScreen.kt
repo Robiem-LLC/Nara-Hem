@@ -235,12 +235,10 @@ internal fun SignInContent(
                     )
                     Button(
                         onClick = { onRegister() },
-                        enabled = !state.busy && form.server.isNotBlank() &&
-                            form.email.isNotBlank() && form.password.length >= 15 &&
-                            form.password == form.passwordConfirmation &&
-                            form.chosenUsername.trim().length >= 3,
+                        enabled = !state.busy && form.registrationProblem() == null,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Create account") }
+                    form.registrationProblem()?.let { Text(it) }
                     TextButton(onClick = {
                         onShow("enroll")
                     }, enabled = !state.busy) { Text("I have an email link") }

@@ -25,11 +25,25 @@ final class SignInViewModel {
     private let settings: AppSettings
     private let tracker: LocationTracker
 
-    /// True when the registration form has a name and matching passwords of 15+ characters.
-    var canRegister: Bool {
-        !session.busy && !session.server.isEmpty && !contact.isEmpty
-            && enrollmentPassword.count >= 15 && enrollmentPassword == enrollmentConfirmPassword
-            && enrollmentUsername.trimmingCharacters(in: .whitespaces).count >= 3
+    /// True when the registration form is ready and nothing else is running.
+    var canRegister: Bool { !session.busy && registrationProblem == nil }
+
+    /// What still stops registering, such as a short password, or nil when ready.
+    var registrationProblem: String? {
+        if session.server.isEmpty { return "Enter the server address at the top." }
+        if contact.isEmpty {
+            return "Enter the email or phone number you were invited with, at the top."
+        }
+        if enrollmentUsername.trimmingCharacters(in: .whitespaces).count < 3 {
+            return "Enter your name, at least 3 characters."
+        }
+        if enrollmentPassword.count < 15 {
+            return "Password needs 15+ characters (\(enrollmentPassword.count) so far)."
+        }
+        if enrollmentPassword != enrollmentConfirmPassword {
+            return "The two passwords don't match."
+        }
+        return nil
     }
 
     /// Creates the view model on the shared session.

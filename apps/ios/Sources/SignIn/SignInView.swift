@@ -53,6 +53,9 @@ struct SignInView: View {
                     Button("Create account") { model.register() }
                         .buttonStyle(NaraHemPrimaryButton())
                         .disabled(!model.canRegister)
+                    if let problem = model.registrationProblem {
+                        Text(problem).font(.footnote).foregroundStyle(subdued)
+                    }
                     Text(
                         """
                         Use the email or phone number you were invited with. Your name is what \
