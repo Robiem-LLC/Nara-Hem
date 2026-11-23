@@ -15,7 +15,9 @@ services:
       NARAHEM_GOOGLE_MAPS_API_KEY: ${NARAHEM_GOOGLE_MAPS_API_KEY:-} #optional: blank = OpenStreetMap
       # Review mode: the reviewer and the family get this phone code instead of an email.
       NARAHEM_REVIEW_CODE: ${NARAHEM_REVIEW_CODE:?six digits for the reviewer, e.g. 246810}
-      NARAHEM_REVIEW_ACCOUNTS: '@demo.example.com,${NARAHEM_DEMO_REVIEWER:-}'
+      # The seeded reviewer, plus any other review accounts listed in NARAHEM_REVIEW_ACCOUNTS
+      # (comma separated), such as a separate one for Google Play's reviewers.
+      NARAHEM_REVIEW_ACCOUNTS: '@demo.example.com,${NARAHEM_DEMO_REVIEWER:-},${NARAHEM_REVIEW_ACCOUNTS:-}'
     volumes:
       - ${NARAHEM_DIR:-/opt/docker/narahem-demo}/server-data:/data
     ports:
