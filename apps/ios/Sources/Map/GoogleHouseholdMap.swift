@@ -191,7 +191,7 @@ struct GoogleHouseholdMap: UIViewRepresentable {
         }
     }
 
-    /// Draws a round marker image from a photo, or from the name's initial.
+    /// Draws a round marker image from a photo, or from the name's initials.
     private func avatar(_ value: String?, name: String) -> UIImage {
         let size = CGSize(width: 56, height: 56)
         let image = ProfilePhoto.image(value)
@@ -209,8 +209,8 @@ struct GoogleHouseholdMap: UIViewRepresentable {
                 image.draw(
                     in: CGRect(x: rect.midX - w / 2, y: rect.midY - h / 2, width: w, height: h))
             } else {
-                let initials = String(name.prefix(1)).uppercased()
-                let font = UIFont.boldSystemFont(ofSize: 25)
+                let initials = Initials.of(name)
+                let font = UIFont.boldSystemFont(ofSize: initials.count > 1 ? 20 : 25)
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: font, .foregroundColor: UIColor.white,
                 ]

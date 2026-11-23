@@ -61,7 +61,7 @@ class SignInFlowTest {
         showsPasswordStep()
         compose.onNodeWithText("Password").assertExists()
         compose.onNodeWithText("Sign in").assertIsEnabled()
-        compose.onNodeWithText("Set up invited account").assertExists()
+        compose.onNodeWithText("Register new account").assertExists()
         compose.onNodeWithText("Continue").assertDoesNotExist()
         click("Show")
         compose.onNodeWithText("Hide").assertExists()
@@ -84,12 +84,24 @@ class SignInFlowTest {
     }
 
     @Test
+    fun registeringWaitsForANameAndMatchingPasswords() {
+        showsPasswordStep()
+        click("Register new account")
+        compose.onNodeWithText("Create account").assertIsNotEnabled()
+        type("Your name (one or two words)", "John Doe")
+        type("Password (15+ characters)", "synthetic long password")
+        type("Verify password", "synthetic long password")
+        compose.onNodeWithText("Create account").assertIsEnabled()
+        type("Verify password", "!")
+        compose.onNodeWithText("Create account").assertIsNotEnabled()
+    }
+
+    @Test
     fun invitedAccountSetupGoesFromResendToEnrollment() {
         showsPasswordStep()
-        click("Set up invited account")
-        compose.onNodeWithText("Send me a code").assertExists()
-        click("Enter code or link")
-        compose.onNodeWithText("Code from your text, or link from your email").assertExists()
+        click("Register new account")
+        click("I have an email link")
+        compose.onNodeWithText("Email link or token").assertExists()
         compose.onNodeWithText("Finish enrollment").assertIsNotEnabled()
         type("Display username", "Sam")
         type("Choose password (new members)", "synthetic long password")
@@ -109,8 +121,8 @@ class SignInFlowTest {
         click("Request household access")
         click("Back")
         showsPasswordStep()
-        click("Set up invited account")
-        click("Enter code or link")
+        click("Register new account")
+        click("I have an email link")
         type("Display username", "Sa")
         type("Choose password (new members)", "synthetic long password")
         type("Confirm password", "synthetic long password")

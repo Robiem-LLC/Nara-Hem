@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Signed-out screen: sign in, finish an invitation, or request access. Same structure as Android.
+/// Signed-out screen: sign in, register an invited account, or request access. Same structure as
+/// Android.
 struct SignInView: View {
     @Bindable var model: SignInViewModel
 
@@ -19,6 +20,7 @@ struct SignInView: View {
                         Button("Continue") { model.firstStep = false }
                             .buttonStyle(NaraHemPrimaryButton())
                             .disabled(model.session.server.isEmpty || model.contact.isEmpty)
+                        Button("Register new account") { model.mode = "register" }
                     } else {
                         HStack {
                             if model.showPassword {
@@ -34,29 +36,27 @@ struct SignInView: View {
                         Button("Sign in") { model.signIn() }
                             .buttonStyle(NaraHemPrimaryButton())
                             .disabled(model.session.busy || model.password.isEmpty)
-                        Button("Set up invited account") { model.mode = "invitation" }
+                        Button("Register new account") { model.mode = "register" }
                         Button("Change email or phone") { model.firstStep = true }
                     }
                     Button("Request household access") { model.mode = "request" }
                         .font(.subheadline.weight(.semibold)).padding(.top, 2)
-                } else if model.mode == "invitation" {
-                    Text("Set up an invited account").font(.headline)
-                    loginField("Username (display name)", text: $model.enrollmentUsername)
+                } else if model.mode == "register" {
+                    Text("Register new account").font(.headline)
+                    loginField(
+                        "Your name (one or two words)", text: $model.enrollmentUsername,
+                        name: true)
                     SecureField("Password (15+ characters)", text: $model.enrollmentPassword)
                         .padding(16).background(panel, in: RoundedRectangle(cornerRadius: 9))
-                    SecureField("Confirm password", text: $model.enrollmentConfirmPassword)
+                    SecureField("Verify password", text: $model.enrollmentConfirmPassword)
                         .padding(16).background(panel, in: RoundedRectangle(cornerRadius: 9))
-                    Button("Send me a code") { model.requestInvite() }
-                    loginField(
-                        "Code from your text, or link from your email", text: $model.invitationCode)
-                    Button("Confirm invitation") {
-                        model.verifyInvite()
-                    }.disabled(!model.canConfirmInvitation)
+                    Button("Create account") { model.register() }
+                        .buttonStyle(NaraHemPrimaryButton())
+                        .disabled(!model.canRegister)
                     Text(
                         """
-                        Your email or phone number is used for login. Your username is the name \
-                        your household sees. After confirming, verify this iPhone with the code \
-                        you're sent.
+                        Use the email or phone number you were invited with. Your name is what \
+                        your household sees. Next, this iPhone is sent a code to confirm it's you.
                         """
                     )
                     .font(.caption).foregroundStyle(subdued)
@@ -82,13 +82,14 @@ struct SignInView: View {
 
     /// A text field styled for the sign-in form.
     private func loginField(
-        _ title: String, text: Binding<String>, url: Bool = false, email: Bool = false
+        _ title: String, text: Binding<String>, url: Bool = false, email: Bool = false,
+        name: Bool = false
     ) -> some View {
         TextField(title, text: text)
-            .textInputAutocapitalization(.never)
+            .textInputAutocapitalization(name ? .words : .never)
             .autocorrectionDisabled()
             .keyboardType(url ? .URL : email ? .emailAddress : .default)
-            .textContentType(url ? .URL : .username)
+            .textContentType(url ? .URL : name ? .name : .username)
             .padding(16)
             .frame(height: 60)
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(subdued.opacity(0.65)))

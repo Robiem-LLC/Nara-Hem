@@ -137,14 +137,10 @@
             [:]
         }
 
-        func requestInvite(server: String, contact: String) async throws -> String {
-            "Invitation email sent."
-        }
-
-        func verifyInvite(
-            server: String, contact: String, code: String, username: String, password: String
-        ) async throws {
-            calls.append("verifyInvite")
+        func register(server: String, contact: String, username: String, password: String)
+            async throws
+        {
+            calls.append("register")
         }
 
         func requestAccess(

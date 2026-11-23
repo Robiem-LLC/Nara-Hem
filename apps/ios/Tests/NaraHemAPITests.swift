@@ -118,24 +118,12 @@ final class NaraHemAPITests: XCTestCase {
     }
 
     func testInvitationsAndAccessRequests() async throws {
-        let invite = try await api.requestInvite(server: address, contact: "sam@example.invalid")
-        XCTAssertEqual(invite, "Check your email.")
-        try await api.verifyInvite(
-            server: address, contact: "sam@example.invalid",
-            code: "https://x.test/#verify=" + String(repeating: "t", count: 30) + "&a=1",
-            username: "", password: "")
-        let verify = try XCTUnwrap(fake.bodies["POST /api/enrollment/verify"])
-        XCTAssertEqual(verify["token"] as? String, String(repeating: "t", count: 30))
-        XCTAssertNil(verify["code"])
-        XCTAssertTrue(verify["username"] is NSNull)
-        // A texted code goes with the phone number it was sent to.
-        try await api.verifyInvite(
-            server: address, contact: "+14155550123", code: " 123456 ", username: "sam",
+        try await api.register(
+            server: address, contact: "+14155550123", username: "John Doe",
             password: "a long synthetic password")
-        let coded = try XCTUnwrap(fake.bodies["POST /api/enrollment/verify"])
-        XCTAssertEqual(coded["code"] as? String, "123456")
-        XCTAssertEqual(coded["email"] as? String, "+14155550123")
-        XCTAssertNil(coded["token"])
+        let registered = try XCTUnwrap(fake.bodies["POST /api/enrollment/register"])
+        XCTAssertEqual(registered["email"] as? String, "+14155550123")
+        XCTAssertEqual(registered["username"] as? String, "John Doe")
         let request = try await api.requestAccess(
             server: address, contact: "sam@example.invalid", name: "Sam", relationship: "Child")
         XCTAssertEqual(request, "Request sent.")

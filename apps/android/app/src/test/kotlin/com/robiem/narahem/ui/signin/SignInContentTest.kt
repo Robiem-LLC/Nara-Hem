@@ -30,6 +30,7 @@ class SignInContentTest {
                 onResendInvitation = { events += "resend" },
                 onShow = { events += "show:$it" },
                 onFinishEnrollment = { events += "finish" },
+                onRegister = { events += "register" },
                 onRequestInvitation = { events += "request" },
                 onSignIn = { events += "sign-in" }
             )

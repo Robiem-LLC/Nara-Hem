@@ -124,9 +124,15 @@ def find_account(db, value):
 
 
 def username(value):
-    """Validates a username: 3 to 64 letters, digits, dots, dashes or underscores."""
-    if not re.fullmatch(r"[a-zA-Z0-9_.-]{3,64}", value):
-        raise HTTPException(422, "Username: 3–64 letters, numbers, dots, dashes or underscores")
+    """Validates a username and returns it tidied: one or two words, 3 to 64 characters, of
+    letters, numbers, dots, dashes, apostrophes or underscores, such as "John Doe".
+    """
+    value = " ".join(value.split())
+    if not 3 <= len(value) <= 64 or not re.fullmatch(r"[\w.'-]+( [\w.'-]+)?", value):
+        raise HTTPException(
+            422,
+            "Username: one or two words, 3–64 letters, numbers, dots, dashes or apostrophes",
+        )
     return value
 
 
@@ -359,6 +365,7 @@ def create_app(
                     in (
                         "/api/login",
                         "/api/enrollment/request",
+                        "/api/enrollment/register",
                         "/api/enrollment/verify",
                         "/api/enrollment/claim",
                         "/api/invitation-requests",
@@ -742,11 +749,10 @@ def create_app(
             settings.sms_error = str(error)
             raise error from None
 
-    def queue(db, account, text=True):
-        """Queues an invitation with a new verification link by email, and the invitation by
-        text (without text, by email only), wherever the account can be reached. The text has no
-        link: it names the server, and the app has a code texted with text_code(). Returns the
-        channels used.
+    def queue(db, account):
+        """Queues the invitation by email, with a link to set the account up in a browser, and by
+        text, wherever the account can be reached. The text has no link: it names the server,
+        where the app registers. Returns the channels used.
         """
         db.query(Challenge).filter_by(account_id=account.id, used=False).delete()
         token = secrets.token_urlsafe(32)
@@ -768,7 +774,7 @@ def create_app(
             )
             if line
         )
-        get_app = f"2. Get the Nära Hem app:\n{apps}\n\n" if apps else ""
+        get_app = f"1. Get the Nära Hem app:\n{apps}\n\n" if apps else ""
         return notify(
             db,
             account,
@@ -776,42 +782,17 @@ def create_app(
             f"Nära Hem: you're invited to {household}",
             (
                 f"You're invited to {household} on Nära Hem.\n\n"
-                f"1. Set up your account within 30 minutes:\n{link}\n\n"
                 f"{get_app}"
-                f"{3 if apps else 2}. Sign in to the app with:\n"
+                f"{2 if apps else 1}. In the app, tap Register and enter:\n"
                 f"  Server: {public_url}\n"
                 f"  {sign_in}\n"
-                "  Password: the one you choose in step 1\n\n"
-                "Setting up your account doesn't approve a phone or share anyone's location."
+                "  A username and password of your choice\n"
+                "The app then sends you a code to confirm it's you.\n\n"
+                f"Or set up your account in a browser within 30 minutes:\n{link}\n\n"
+                "Setting up your account doesn't share anyone's location."
             ),
             texting.invitation(db.get(Settings, 1).household or "", public_url),
-            only=None if text else ("email",),
         )
-
-    def text_code(db, account):
-        """Texts a six-digit code that sets up an invited account in the app, standing in for
-        the email link, which a text can't carry. Returns True if one was queued.
-        """
-        if not account.phone or not texting_on(db):
-            return False
-        code = f"{secrets.randbelow(1000000):06d}"
-        db.add(
-            Challenge(
-                id=digest(f"code:{account.id}:{code}"),
-                account_id=account.id,
-                expires=time.time() + 1800,
-            )
-        )
-        notify(
-            db,
-            account,
-            "c:" + account.id,
-            "Nära Hem verification code",
-            "",
-            texting.code_message(code),
-            only=("text",),
-        )
-        return True
 
     def issue_password_reset(db, account):
         """Queues a password reset link to the account's own email. The link is never returned
@@ -957,9 +938,7 @@ def create_app(
         texting_on=texting_on,
     )
 
-    enrollment.install(
-        app, admin=admin, database=database, queue=queue, rate=rate, text_code=text_code
-    )
+    enrollment.install(app, admin=admin, database=database, queue=queue, rate=rate)
 
     revocation.install(app, admin=admin, database=database)
 

@@ -282,14 +282,13 @@ def install(
         body: PhoneRequest, request: Request, auth=Depends(current), db: Session = Depends(database)
     ):
         """Sends a six-digit approval code for a new phone, by email and text where the account
-        has them.
+        has them. For an account registered from the app, the same code also confirms it.
         """
         rate(request, "phone-code:" + auth[0].id, 3, shared=True)
         rate(request, "phone-code-global", 45, shared=True)
         device = db.get(ClientDevice, body.device_id)
         if (
-            not auth[0].verified
-            or not device
+            not device
             or device.account_id != auth[0].id
             or device.status != "pending"
             or platform(device) not in ("ios", "android")
@@ -338,7 +337,7 @@ def install(
             select(ServiceState).where(ServiceState.id == 1).with_for_update()
         ).scalar_one()
         device = db.get(ClientDevice, body.device_id)
-        if not auth[0].verified or not device or device.account_id != auth[0].id:
+        if not device or device.account_id != auth[0].id:
             raise HTTPException(403, "Pending phone not found")
         if device.status != "pending" or platform(device) not in ("ios", "android"):
             raise HTTPException(409, "Phone is not awaiting verification")
@@ -367,6 +366,11 @@ def install(
             )
         change_roster(db, state, add=device, actor=auth[0].id)
         db.delete(challenge)
+        # The code went to the account's own email or phone number, so it also confirms an
+        # account registered from the app.
+        if not auth[0].verified:
+            auth[0].verified = True
+            audit(db, "account.confirmed", auth[0].id, verification="phone_code")
         # The account now has its phone, so its other pending phone registrations can never
         # complete; delete them.
         for abandoned in list(

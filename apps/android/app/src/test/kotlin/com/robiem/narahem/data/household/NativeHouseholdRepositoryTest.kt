@@ -81,12 +81,12 @@ class NativeHouseholdRepositoryTest {
         assertEquals(1, count("POST /api/phones/code"))
     }
 
-    @Test fun enrollmentNeedsAVerifiedAccountAndHappensOnce() = runBlocking<Unit> {
+    @Test fun enrollmentHappensOnceEvenBeforeTheAccountIsConfirmed() = runBlocking<Unit> {
         fake.startWithOwner()
-        repo.enroll(member(verified = false), address)
-        assertEquals("verify-email", repo.status(member(verified = false)))
+        // A registered account isn't confirmed until this phone's code, so it may register.
+        assertEquals("register", repo.status(member(verified = false)))
         assertEquals("", repo.ownPairingCode())
-        repo.enroll(member(), address)
+        repo.enroll(member(verified = false), address)
         val first = repo.deviceFingerprint()
         repo.enroll(member(), address)
         assertEquals(first, repo.deviceFingerprint())

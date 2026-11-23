@@ -53,12 +53,15 @@ def install(app, *, credential, current, database, rate, trip_processor, verifie
     def register(
         body: RegisterInput,
         request: Request,
-        auth=Depends(verified),
+        auth=Depends(current),
         db: Session = Depends(database),
     ):
         """Registers a new device's public keys. Phones must then confirm an emailed code;
-        nothing is approved here.
+        nothing is approved here. A phone may register for an account not yet confirmed, since
+        that code is what confirms it; a browser needs a confirmed account.
         """
+        if body.platform not in ("ios", "android"):
+            verified(auth, db)
         rate(request, "register", 10)
         state = db.execute(
             select(ServiceState).where(ServiceState.id == 1).with_for_update()

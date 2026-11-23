@@ -59,10 +59,18 @@ class SignInViewModelTest {
             server: String,
             token: String,
             username: String,
-            password: String,
-            contact: String
+            password: String
         ) {
             calls += "complete"
+        }
+
+        override suspend fun register(
+            server: String,
+            contact: String,
+            username: String,
+            password: String
+        ) {
+            calls += "register:$contact:$username"
         }
 
         override suspend fun requestInvitation(
@@ -131,6 +139,14 @@ class SignInViewModelTest {
         assertEquals("Signed in.", session.current.message)
     }
 
+    @Test fun registeringSignsStraightIn() = runTest(main.dispatcher) {
+        val (session, model) = screen()
+        model.register(server, "+14155550123", "John Doe", "a long synthetic password")
+        advanceUntilIdle()
+        assertEquals("register:+14155550123:John Doe", calls.first())
+        assertEquals("Signed in.", session.current.message)
+    }
+
     @Test fun invitationStepsMoveBetweenScreens() = runTest(main.dispatcher) {
         val (session, model) = screen()
         model.onboarding("request")
@@ -141,7 +157,7 @@ class SignInViewModelTest {
         model.completeInvitation(server, "token", "sam", "password")
         advanceUntilIdle()
         assertEquals("signin", session.current.onboarding)
-        assertTrue(session.current.message.startsWith("Account confirmed."))
+        assertTrue(session.current.message.startsWith("Email confirmed."))
         model.claimInvitation(server, "sam@example.invalid", "sam", "password")
         advanceUntilIdle()
         assertEquals("Use the emailed link.", session.current.message)

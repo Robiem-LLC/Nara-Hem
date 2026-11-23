@@ -144,10 +144,8 @@ class HouseholdSession(
     fun prepareDevice(server: String) = work {
         val account = mutable.value.account ?: return@work
         val repo = household ?: return@work
-        if (!account.verified) {
-            mutable.update { it.copy(deviceStatus = "verify-email") }
-            return@work
-        }
+        // An account registered in the app isn't confirmed yet; the code that approves this
+        // phone confirms it, so it may register.
         repo.enroll(account, server)
         refreshTrusted()
     }

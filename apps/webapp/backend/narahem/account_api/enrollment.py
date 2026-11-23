@@ -9,24 +9,29 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from narahem.app import HASHER, digest, find_account, username
+from narahem.app import HASHER, account_trusted, digest, find_account, username
 from narahem.data_service import audit
 from narahem.models import (
     Account,
     AccountApproval,
     Challenge,
+    ClientDevice,
     EnrollmentClaim,
+    LoginSession,
+    NativeRefreshSession,
     Outbox,
+    PhoneChallenge,
     ServiceState,
 )
 from narahem.schemas import (
+    AccountRegistrationInput,
     ClaimInput,
     EmailInput,
     VerifyInput,
 )
 
 
-def install(app, *, admin, database, queue, rate, text_code):
+def install(app, *, admin, database, queue, rate):
     """Registers this module's routes. The keyword arguments are shared helpers from
     create_app().
     """
@@ -108,8 +113,8 @@ def install(app, *, admin, database, queue, rate, text_code):
 
     @app.post("/api/enrollment/request", status_code=202)
     def request_enrollment(body: EmailInput, request: Request, db: Session = Depends(database)):
-        """Sends an invited email address a new enrollment link, and an invited phone number a
-        six-digit code to enter in the app. Returns the same response whether or not it exists.
+        """Sends the invitation again to an invited email address or phone number. Returns the
+        same response whether or not it exists.
         """
         rate(request, "enrollment", 5)
         account = find_account(db, body.email)
@@ -118,47 +123,92 @@ def install(app, *, admin, database, queue, rate, text_code):
             and account.status != "revoked"
             and (account.status == "pending" or not account.verified)
         ):
-            queue(db, account, text=False)
-            text_code(db, account)
+            queue(db, account)
             db.commit()
-        return {"message": "If you're invited, a code or link is on its way."}
+        return {"message": "If eligible, a confirmation link will be sent."}
+
+    @app.post("/api/enrollment/register", status_code=201)
+    def register(body: AccountRegistrationInput, request: Request, db: Session = Depends(database)):
+        """Creates the account for an open invitation from the app: the invited email address
+        or phone number, a username and a password. The account can sign in but stays
+        unconfirmed, seeing nothing of the household, until the code sent to that address or
+        number approves its phone. Until then, registering again replaces it, so knowing someone's
+        number isn't enough to lock them out.
+        """
+        rate(request, "register-account", 5)
+        account = find_account(db, body.email)
+        if not account or not replaceable(db, account):
+            raise HTTPException(
+                404,
+                "There's no open invitation for that email or phone number. Ask your household "
+                "administrator to invite you.",
+            )
+        chosen = username(body.username)
+        if db.scalar(
+            select(Account).where(
+                func.lower(Account.username) == chosen.lower(), Account.id != account.id
+            )
+        ):
+            raise HTTPException(409, "Username already taken")
+        # Whoever registered before loses their sign-in and unfinished phones.
+        db.query(LoginSession).filter_by(account_id=account.id).delete(synchronize_session=False)
+        db.query(NativeRefreshSession).filter_by(account_id=account.id).delete(
+            synchronize_session=False
+        )
+        for device in db.scalars(
+            select(ClientDevice).where(
+                ClientDevice.account_id == account.id, ClientDevice.status == "pending"
+            )
+        ):
+            db.query(PhoneChallenge).filter_by(device_id=device.id).delete()
+            db.delete(device)
+        account.username, account.password = chosen, HASHER.hash(body.password)
+        account.status, account.verified = "active", False
+        db.query(Challenge).filter_by(account_id=account.id).delete(synchronize_session=False)
+        audit(db, "account.registered", account.id)
+        db.commit()
+        return {"registered": True, "confirmation": "phone_code"}
+
+    def replaceable(db, account):
+        """Returns True if the account is an open invitation: never set up, or registered from
+        the app but not yet confirmed with a code and without any approved device.
+        """
+        if account.role == "admin" or account.status == "revoked":
+            return False
+        if account.status == "pending":
+            return True
+        return (
+            account.status == "active"
+            and not account_trusted(account, db)
+            and not db.scalar(
+                select(ClientDevice.id).where(
+                    ClientDevice.account_id == account.id, ClientDevice.status != "pending"
+                )
+            )
+        )
 
     @app.post("/api/enrollment/verify")
     def verify(body: VerifyInput, request: Request, db: Session = Depends(database)):
-        """Handles an email verification link, or a code texted to an invited phone number:
-        confirms the address and, for new members, sets the username and password.
+        """Handles an email verification link: confirms the address and, for new members, sets
+        the username and password.
         """
         rate(request, "verify", 10)
-        if body.token:
-            key = digest(body.token)
-        elif body.email and body.code:
-            invited = find_account(db, body.email)
-            # Six digits are few, so each account gets five tries per window wherever they
-            # come from.
-            rate(request, "verify-code:" + digest(body.email.strip().lower()), 5, shared=True)
-            key = digest(f"code:{invited.id}:{body.code}") if invited else None
-        else:
-            raise HTTPException(422, "Enter the code you were sent")
-        challenge = (
-            db.execute(
-                select(Challenge).where(Challenge.id == key).with_for_update()
-            ).scalar_one_or_none()
-            if key
-            else None
-        )
+        challenge = db.execute(
+            select(Challenge).where(Challenge.id == digest(body.token)).with_for_update()
+        ).scalar_one_or_none()
         if not challenge or challenge.used or challenge.expires <= time.time():
-            raise HTTPException(400, "That code or link is invalid or expired")
+            raise HTTPException(400, "Confirmation link is invalid or expired")
         account = db.execute(
             select(Account).where(Account.id == challenge.account_id).with_for_update()
         ).scalar_one()
         if account.status == "revoked":
-            raise HTTPException(400, "That code or link is invalid or expired")
+            raise HTTPException(400, "Confirmation link is invalid or expired")
         if account.status == "pending":
             if not body.password:
                 raise HTTPException(422, "Choose and confirm a password")
             if not body.username:
                 raise HTTPException(422, "Choose a username")
-            chosen = username(body.username.strip())
+            chosen = username(body.username)
             collision = db.scalar(
                 select(Account).where(
                     func.lower(Account.username) == chosen.lower(), Account.id != account.id

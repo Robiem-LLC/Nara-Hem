@@ -16,7 +16,9 @@ final class DeviceApprovalViewModel {
         case "register":
             return "Sign-in is complete, but this iPhone is not registered with your household yet."
         case "first-device": return "Start a brand-new household with a time-limited email code."
-        case "email-code": return "Verify your account email to register this iPhone."
+        case "email-code":
+            return
+                "Confirm it's you with a code sent to your email or phone to register this iPhone."
         case "replacement-required":
             return "Your previous phone must be revoked before this iPhone can replace it."
         case "pending", "pairing":
@@ -59,7 +61,7 @@ final class DeviceApprovalViewModel {
         session.work {
             try await self.household.requestPhoneCode()
             self.session.message =
-                "A six-digit code was sent to your account email. It expires in ten minutes."
+                "A six-digit code was sent to your email or phone. It expires in ten minutes."
         }
     }
 

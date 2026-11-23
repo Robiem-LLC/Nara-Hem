@@ -80,7 +80,7 @@ class SettingsViewModelTest {
         val (session, model) = screen()
         model.requestPhoneCode()
         advanceUntilIdle()
-        assertTrue(session.current.message.startsWith("Six-digit verification code sent"))
+        assertTrue(session.current.message.startsWith("Six-digit code sent to your email or phone"))
         model.confirmPhoneCode("123456")
         advanceUntilIdle()
         assertTrue("verifyPhoneCode" in household.calls)

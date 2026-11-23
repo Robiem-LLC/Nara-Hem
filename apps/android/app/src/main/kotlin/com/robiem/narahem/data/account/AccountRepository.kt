@@ -43,17 +43,24 @@ interface AccountRepository {
         error("Invitation lookup is unavailable.")
 
     /**
-     * Completes enrollment from an emailed link, or the six-digit code texted to [contact], by
-     * setting the username and password.
+     * Completes enrollment from an emailed link by setting the username and password, then signs
+     * in.
      */
     suspend fun completeEnrollment(
         server: String,
         token: String,
         username: String,
-        password: String,
-        contact: String = ""
+        password: String
     ) {
         error("Enrollment is unavailable.")
+    }
+
+    /**
+     * Registers the account invited at this email address or phone number with a username and
+     * password. It stays unconfirmed until the code sent when approving this phone.
+     */
+    suspend fun register(server: String, contact: String, username: String, password: String) {
+        error("Registration is unavailable.")
     }
 
     /** Submits a request for the admin to invite this person. */

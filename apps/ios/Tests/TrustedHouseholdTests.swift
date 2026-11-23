@@ -100,17 +100,13 @@ final class TrustedHouseholdTests: XCTestCase {
         XCTAssertTrue(TrustedHousehold(api: api).restoreDevice())
     }
 
-    func testEnrollmentNeedsAVerifiedAccountAndHappensOnce() async throws {
+    func testEnrollmentHappensOnceEvenBeforeTheAccountIsConfirmed() async throws {
         fake.startWithOwner()
         fake.verified = false
-        let unverified = try await signIn()
-        let state = try await household.status(account: unverified)
-        XCTAssertEqual(state, "verify-email")
-        await rejects("Administrator approval is required first") {
-            try await self.household.enroll(account: unverified, server: self.address)
-        }
-        fake.verified = true
         let account = try await signIn()
+        // A registered account isn't confirmed until this iPhone's code, so it may register.
+        let state = try await household.status(account: account)
+        XCTAssertEqual(state, "register")
         try await household.enroll(account: account, server: address)
         let first = household.identity?.id
         try await household.enroll(account: account, server: address)

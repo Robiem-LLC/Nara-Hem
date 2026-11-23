@@ -57,7 +57,7 @@ final class ScreenTests: XCTestCase {
         app.signIn.firstStep = false
         app.signIn.showPassword = true
         render(SignInView(model: app.signIn))
-        for mode in ["invitation", "request"] {
+        for mode in ["register", "request"] {
             app.signIn.mode = mode
             render(SignInView(model: app.signIn))
         }

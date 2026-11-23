@@ -10,6 +10,7 @@ import { locked } from './client/browser-access.mjs';
 import { deviceApi, lock, save, showTemplate, stop, sync } from './client/core.mjs';
 import { refreshHouseholdMemberPhones } from './client/devices-screen.mjs';
 import { freshness, screen } from './client/map-screen.mjs';
+import { initials } from './client/initials.mjs';
 import { zoneTime } from './client/zones.mjs';
 import { state } from './client/state.mjs';
 import * as mailPresets from './mail-presets.mjs';
@@ -158,6 +159,7 @@ window.FamilyClient = {
   freshness: (p) => freshness(p),
   /** A time, with the member's own time beside it when their zone differs (zones.mjs). */
   zoneTime: (ms, zone, options) => zoneTime(ms, zone, options),
+  initials: (name) => initials(name),
   summaries() {
     if (!state.vault || !state.chain) return [];
     const profiles = new Map(

@@ -355,7 +355,6 @@ class NativeHouseholdRepository(
             vault = old
             return
         }
-        if (!account.verified) return
         require(account.id.matches(Regex("[a-f0-9]{32}"))) {
             "Server did not return a valid account identity."
         }
@@ -445,7 +444,7 @@ class NativeHouseholdRepository(
 
     /** Determines this device's setup state from the server and the signed roster. */
     override suspend fun status(account: Account): String {
-        val v = vault ?: return if (account.verified) "register" else "verify-email"
+        val v = vault ?: return "register"
         val device = try {
             deviceRequest("/api/device")
         } catch (failure: DeviceApiFailure) {
@@ -488,7 +487,7 @@ class NativeHouseholdRepository(
 
     /** Submits the approval code and syncs the roster. */
     override suspend fun verifyPhoneCode(code: String) {
-        require(code.matches(Regex("[0-9]{6}"))) { "Enter the six-digit emailed code." }
+        require(code.matches(Regex("[0-9]{6}"))) { "Enter the six-digit code." }
         val v = vault ?: error("Register this phone first")
         accounts.authenticated(
             "/api/phones/verify",

@@ -8,7 +8,7 @@ final class SignInViewModel {
     var contact = ""
     var password = ""
 
-    /// Current form: "signin", "invitation" or "request".
+    /// Current form: "signin", "register" or "request".
     var mode = "signin"
 
     /// True while asking for the email; the password is asked on the next step.
@@ -17,7 +17,6 @@ final class SignInViewModel {
     var enrollmentUsername = ""
     var enrollmentPassword = ""
     var enrollmentConfirmPassword = ""
-    var invitationCode = ""
     var requestedName = ""
     var relationship = ""
     let session: HouseholdSession
@@ -26,10 +25,11 @@ final class SignInViewModel {
     private let settings: AppSettings
     private let tracker: LocationTracker
 
-    /// True when the invitation form has a token, a username and matching passwords.
-    var canConfirmInvitation: Bool {
-        !session.busy && !invitationCode.isEmpty && enrollmentPassword == enrollmentConfirmPassword
-            && enrollmentUsername.count >= 3
+    /// True when the registration form has a name and matching passwords of 15+ characters.
+    var canRegister: Bool {
+        !session.busy && !session.server.isEmpty && !contact.isEmpty
+            && enrollmentPassword.count >= 15 && enrollmentPassword == enrollmentConfirmPassword
+            && enrollmentUsername.trimmingCharacters(in: .whitespaces).count >= 3
     }
 
     /// Creates the view model on the shared session.
@@ -46,39 +46,40 @@ final class SignInViewModel {
 
     /// Signs in with the entered email and password.
     func signIn() {
-        session.work {
-            let user = try await self.accounts.signIn(
-                server: self.session.server, identifier: self.contact, password: self.password)
-            self.session.account = user
-            self.password = ""
-            self.session.signedIn = true
-            self.tracker.askForAlwaysAfterSignIn()
-            self.settings.server = self.session.server
-            _ = self.household.restore(account: user, server: self.session.server)
-            await self.session.refreshNow()
-            self.session.startForegroundRefresh()
-            let next =
-                self.session.deviceStatus == "ready"
-                ? "Household connected." : "Approve this device to share locations."
-            self.session.message = "Signed in. \(next)"
-        }
+        session.work { try await self.signInNow() }
     }
 
-    /// Asks the server for a new invitation link by email, or a code by text.
-    func requestInvite() {
-        session.work {
-            self.session.message = try await self.accounts.requestInvite(
-                server: self.session.server, contact: self.contact)
-        }
+    /// Signs in with the entered email and password, inside work already started.
+    private func signInNow() async throws {
+        let user = try await accounts.signIn(
+            server: session.server, identifier: contact, password: password)
+        session.account = user
+        password = ""
+        session.signedIn = true
+        tracker.askForAlwaysAfterSignIn()
+        settings.server = session.server
+        _ = household.restore(account: user, server: session.server)
+        await session.refreshNow()
+        session.startForegroundRefresh()
+        let next =
+            session.deviceStatus == "ready"
+            ? "Household connected." : "Approve this device to share locations."
+        session.message = "Signed in. \(next)"
     }
 
-    /// Completes an invitation and signs in.
-    func verifyInvite() {
+    /// Registers the invited account, then signs in, which leads to approving this iPhone with
+    /// the code that also confirms the account.
+    func register() {
         session.work {
-            try await self.accounts.verifyInvite(
-                server: self.session.server, contact: self.contact, code: self.invitationCode,
+            try await self.accounts.register(
+                server: self.session.server, contact: self.contact,
                 username: self.enrollmentUsername, password: self.enrollmentPassword)
-            self.session.message = "Invitation verified. Sign in and approve this device."
+            self.password = self.enrollmentPassword
+            self.enrollmentPassword = ""
+            self.enrollmentConfirmPassword = ""
+            self.mode = "signin"
+            self.firstStep = false
+            try await self.signInNow()
         }
     }
 

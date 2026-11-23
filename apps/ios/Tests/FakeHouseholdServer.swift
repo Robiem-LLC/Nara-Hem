@@ -231,10 +231,8 @@ final class FakeHouseholdServer {
         case "PUT /api/account/username":
             if let denied = account() { return denied }
             return Self.reply(["username": payload["username"] ?? ""])
-        case "POST /api/enrollment/request":
-            return Self.reply(["message": "Check your email."])
-        case "POST /api/enrollment/verify":
-            return Self.reply(["verified": true])
+        case "POST /api/enrollment/register":
+            return Self.reply(["registered": true])
         case "POST /api/invitation-requests":
             return Self.reply(["message": "Request sent."])
         case "POST /api/devices/register":

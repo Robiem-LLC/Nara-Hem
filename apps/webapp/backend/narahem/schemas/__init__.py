@@ -1,6 +1,7 @@
 """Request bodies the API accepts, validated by Pydantic."""
 
 from .accounts import (
+    AccountRegistrationInput,
     ChangePasswordInput,
     ChangeUsernameInput,
     ClaimInput,
@@ -38,6 +39,7 @@ __all__ = [
     "EmailInput",
     "InvitationInput",
     "InvitationRequestInput",
+    "AccountRegistrationInput",
     "ClaimInput",
     "VerifyInput",
     "ChangeUsernameInput",

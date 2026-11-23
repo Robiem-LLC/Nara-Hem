@@ -887,11 +887,9 @@ function updateMemberDetails() {
         image.alt = '';
         photo.replaceChildren(image);
       }
-    } else if (
-      existingPhoto ||
-      photo.textContent !== (card.dataset.username || '?').slice(0, 1).toUpperCase()
-    ) {
-      photo.textContent = (card.dataset.username || '?').slice(0, 1).toUpperCase();
+    } else {
+      const letters = window.FamilyClient.initials(card.dataset.username);
+      if (existingPhoto || photo.textContent !== letters) photo.textContent = letters;
     }
   }
 }

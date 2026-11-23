@@ -6,6 +6,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from fastapi.testclient import TestClient
 from nacl.public import PrivateKey
 from nacl.signing import SigningKey
 from sqlalchemy.orm import Session
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from narahem import mobile_enrollment, review_mode, texting
 from narahem.data_service import canonical
 from narahem.models import Account, ClientDevice, Outbox, PhoneChallenge, Settings
-from tests import test_relay
+from tests import test_relay, test_setup
 
 B64 = test_relay.B64
 
@@ -121,6 +122,94 @@ class PhoneEnrollmentTests(unittest.TestCase):
             code = message.split("code:\n")[1][:6]
             reply = client.post("/api/phones/verify", json={"device_id": device, "code": code})
             self.assertEqual(reply.status_code, 200, reply.text)
+
+    def signed_in(self, contact):
+        """Returns a new client signed in with the contact and the test password, or None."""
+        client = TestClient(self.app, base_url=test_setup.PUBLIC)
+        client.headers["Origin"] = test_setup.PUBLIC
+        result = client.post("/api/login", json={"email": contact, "password": test_setup.PASSWORD})
+        if result.status_code != 200:
+            return None
+        client.headers["X-CSRF-Token"] = result.json()["csrf"]
+        return client
+
+    def test_an_invited_number_registers_in_the_app_and_one_code_confirms_it(self):
+        texts = []
+        self.enable_phone_enrollment()
+
+        def send(textbelt, key, phone, message):
+            texts.append((phone, message))
+            return 9
+
+        with (
+            patch.object(texting.Textbelt, "quota", lambda textbelt, key: 10),
+            patch.object(texting.Textbelt, "send", send),
+        ):
+            self.client.put("/api/texting", json={"key": "synthetic-key"})
+            invited = self.client.post("/api/invitations", json={"email": "(415) 555-0123"})
+            self.assertEqual(invited.status_code, 201, invited.text)
+            self.assertIn("Create your account using", texts[-1][1])
+            app = TestClient(self.app, base_url=test_setup.PUBLIC)
+            app.headers["Origin"] = test_setup.PUBLIC
+            form = {"email": "415-555-0123", "password": test_setup.PASSWORD}
+            # Someone else who knows the number registers first...
+            first = app.post("/api/enrollment/register", json={**form, "username": "Not Them"})
+            self.assertEqual(first.status_code, 201, first.text)
+            squatter = self.signed_in("+14155550123")
+            session = squatter.get("/api/session").json()
+            self.assertFalse(session["verified"], "unconfirmed until the code")
+            # ...but registering again replaces them and signs them out.
+            again = app.post("/api/enrollment/register", json={**form, "username": "  John   Doe "})
+            self.assertEqual(again.status_code, 201, again.text)
+            self.assertEqual(squatter.get("/api/session").status_code, 401)
+            member = self.signed_in("415-555-0123")
+            me = member.get("/api/session").json()
+            self.assertEqual((me["username"], me["verified"]), ("John Doe", False))
+            device, _ = self.register_phone(member, me["id"])
+            self.assertEqual(
+                member.post("/api/phones/code", json={"device_id": device}).status_code, 202
+            )
+            phone, message = texts[-1]
+            self.assertEqual(phone, "+14155550123")
+            code = message.split("code:\n")[1][:6]
+            reply = member.post("/api/phones/verify", json={"device_id": device, "code": code})
+            self.assertEqual(reply.status_code, 200, reply.text)
+            # The one code approved the phone and confirmed the account.
+            self.assertTrue(member.get("/api/session").json()["verified"])
+            # Now it's taken: registering again, or registering the admin, is refused.
+            taken = app.post("/api/enrollment/register", json={**form, "username": "Someone"})
+            self.assertEqual(taken.status_code, 404)
+            owner = app.post(
+                "/api/enrollment/register",
+                json={**form, "email": test_setup.OWNER, "username": "Someone"},
+            )
+            self.assertEqual(owner.status_code, 404)
+
+    def test_usernames_are_one_or_two_words(self):
+        self.enable_phone_enrollment()
+        self.client.post("/api/invitations", json={"email": "kim@example.invalid"})
+        app = TestClient(self.app, base_url=test_setup.PUBLIC)
+        app.headers["Origin"] = test_setup.PUBLIC
+        form = {"email": "kim@example.invalid", "password": test_setup.PASSWORD}
+        for name in ("John Q Doe", "ab", "J@hn Doe"):
+            reply = app.post("/api/enrollment/register", json={**form, "username": name})
+            self.assertEqual(reply.status_code, 422, name)
+        for name in ("Kim", "Åsa O'Neil", "kim.lee-2"):
+            reply = app.post("/api/enrollment/register", json={**form, "username": name})
+            self.assertEqual(reply.status_code, 201, name)
+        # An invited email address registers the same way; its code comes by email.
+        member = self.signed_in("kim@example.invalid")
+        me = member.get("/api/session").json()
+        device, _ = self.register_phone(member, me["id"])
+        self.assertEqual(
+            member.post("/api/phones/code", json={"device_id": device}).status_code, 202
+        )
+        self.assertEqual(self.messages[-1][1], "kim@example.invalid")
+        reply = member.post(
+            "/api/phones/verify", json={"device_id": device, "code": self.emailed_code()}
+        )
+        self.assertEqual(reply.status_code, 200, reply.text)
+        self.assertTrue(member.get("/api/session").json()["verified"])
 
     def test_signer_needs_a_trusted_admin_browser_and_a_stable_key(self):
         reply = self.client.post("/api/enrollment/signer", json={})

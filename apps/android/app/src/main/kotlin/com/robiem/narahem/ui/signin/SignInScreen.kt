@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -48,9 +49,11 @@ internal fun SignInScreen(state: AppState, form: SignInForm, model: SignInViewMo
                 form.server,
                 form.confirmation,
                 form.chosenUsername,
-                form.password,
-                form.email
+                form.password
             )
+        },
+        onRegister = {
+            model.register(form.server, form.email, form.chosenUsername, form.password)
         },
         onRequestInvitation = {
             model.requestInvitation(form.server, form.email, form.requestName, form.relationship)
@@ -60,8 +63,8 @@ internal fun SignInScreen(state: AppState, form: SignInForm, model: SignInViewMo
 }
 
 /**
- * Signed-out UI: sign in, finish an invitation, or request one. Stateless; every action is a
- * callback.
+ * Signed-out UI: sign in, register an invited account, finish an email invitation, or request
+ * one. Stateless; every action is a callback.
  */
 @Composable
 internal fun SignInContent(
@@ -71,6 +74,7 @@ internal fun SignInContent(
     onResendInvitation: () -> Unit,
     onShow: (step: String) -> Unit,
     onFinishEnrollment: () -> Unit,
+    onRegister: () -> Unit,
     onRequestInvitation: () -> Unit,
     onSignIn: () -> Unit
 ) {
@@ -122,17 +126,17 @@ internal fun SignInContent(
             when (state.onboarding) {
                 "claim" -> {
                     Text(
-                        "Invited by text? Get a code sent to your phone number. Invited by " +
-                            "email? Use the link in the invitation, or have it sent again."
+                        "Invited by email? Use the link in the invitation, or have it sent " +
+                            "again. No additional administrator approval."
                     )
                     Button(onClick = {
                         onResendInvitation()
                     }, enabled = !state.busy) {
-                        Text("Send me a code")
+                        Text("Resend invitation email")
                     }
                     TextButton(onClick = {
                         onShow("enroll")
-                    }) { Text("Enter code or link") }
+                    }) { Text("Enter invitation link") }
                     TextButton(onClick = {
                         onShow("signin")
                     }) { Text("Back to sign-in") }
@@ -141,12 +145,12 @@ internal fun SignInContent(
                 "enroll" -> {
                     Text(
                         "Choose your display username and password. Your " +
-                            "email or phone number remains your login."
+                            "email remains your login and recovery address."
                     )
                     OutlinedTextField(form.confirmation, {
                         form.confirmation = it
                     }, label = {
-                        Text("Code from your text, or link from your email")
+                        Text("Email link or token")
                     }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(
                         form.chosenUsername,
@@ -186,13 +190,62 @@ internal fun SignInContent(
                     }
                     TextButton(onClick = {
                         onShow("claim")
-                    }, enabled = !state.busy) { Text("Send another code") }
+                    }, enabled = !state.busy) { Text("Resend invitation") }
                     TextButton(onClick = {
                         onShow("request")
                     }, enabled = !state.busy) { Text("Request access") }
                     TextButton(onClick = {
                         onShow("signin")
                         form.firstStep = false
+                    }, enabled = !state.busy) { Text("Back to sign-in") }
+                }
+
+                "register" -> {
+                    Text("Register new account")
+                    Text(
+                        "Use the email or phone number you were invited with. Your name is " +
+                            "what your household sees. Next, this phone is sent a code to " +
+                            "confirm it's you."
+                    )
+                    OutlinedTextField(
+                        form.chosenUsername,
+                        { form.chosenUsername = it },
+                        label = { Text("Your name (one or two words)") },
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Words
+                        ),
+                        singleLine = true,
+                        isError = state.fields.containsKey("username"),
+                        supportingText = { state.fields["username"]?.let { Text(it) } },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        form.password,
+                        { form.password = it },
+                        label = { Text("Password (15+ characters)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        form.passwordConfirmation,
+                        { form.passwordConfirmation = it },
+                        label = { Text("Verify password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = { onRegister() },
+                        enabled = !state.busy && form.server.isNotBlank() &&
+                            form.email.isNotBlank() && form.password.length >= 15 &&
+                            form.password == form.passwordConfirmation &&
+                            form.chosenUsername.trim().length >= 3,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Create account") }
+                    TextButton(onClick = {
+                        onShow("enroll")
+                    }, enabled = !state.busy) { Text("I have an email link") }
+                    TextButton(onClick = {
+                        onShow("signin")
                     }, enabled = !state.busy) { Text("Back to sign-in") }
                 }
 
@@ -229,6 +282,11 @@ internal fun SignInContent(
                         }, modifier = Modifier.fillMaxWidth()) {
                             Text("Continue")
                         }
+                        OutlinedButton(onClick = {
+                            onShow("register")
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Register new account")
+                        }
                     } else {
                         OutlinedTextField(
                             form.password,
@@ -254,9 +312,9 @@ internal fun SignInContent(
                             Text("Sign in")
                         }
                         OutlinedButton(onClick = {
-                            onShow("claim")
+                            onShow("register")
                         }, enabled = !state.busy) {
-                            Text("Set up invited account")
+                            Text("Register new account")
                         }
                         TextButton(onClick = {
                             form.firstStep = true
@@ -283,6 +341,7 @@ private fun SignInPreview() {
             onResendInvitation = {},
             onShow = {},
             onFinishEnrollment = {},
+            onRegister = {},
             onRequestInvitation = {},
             onSignIn = {}
         )
@@ -301,6 +360,7 @@ private fun EnrollmentPreview() {
             onResendInvitation = {},
             onShow = {},
             onFinishEnrollment = {},
+            onRegister = {},
             onRequestInvitation = {},
             onSignIn = {}
         )

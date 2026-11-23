@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.robiem.narahem.ui.components.initials
 import com.robiem.narahem.ui.map.AvatarFan
 import com.robiem.narahem.ui.theme.NaraHemColors
 import java.io.ByteArrayOutputStream
@@ -118,7 +119,7 @@ object ProfilePhotos {
         }
     }
 
-    /** Draws a round marker with the member's initial, for members without a photo. */
+    /** Draws a round marker with the member's initials, for members without a photo. */
     fun initialsMarker(name: String, pixels: Int = MARKER_PIXELS, stale: Boolean = false): Bitmap {
         val output = Bitmap.createBitmap(pixels, pixels, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -140,18 +141,14 @@ object ProfilePhotos {
                 color = NaraHemColors.PanelRaised.toArgb()
             }
         )
+        val letters = initials(name)
         val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = NaraHemColors.White.toArgb()
-            textSize = pixels * .44f
+            textSize = pixels * if (letters.length > 1) .36f else .44f
             textAlign = Paint.Align.CENTER
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
-        canvas.drawText(
-            name.trim().take(1).uppercase().ifEmpty { "?" },
-            center,
-            center - (text.ascent() + text.descent()) / 2,
-            text
-        )
+        canvas.drawText(letters, center, center - (text.ascent() + text.descent()) / 2, text)
         return output
     }
 
@@ -209,7 +206,7 @@ object ProfilePhotos {
     }
 }
 
-/** Shows a member's photo in a circle, or their initial if they have no photo. */
+/** Shows a member's photo in a circle, or their initials if they have no photo. */
 @Composable
 fun RoundProfilePhoto(photo: String?, name: String, size: Dp = 46.dp) {
     val bitmap = remember(photo) { ProfilePhotos.bitmap(photo)?.asImageBitmap() }
@@ -220,7 +217,7 @@ fun RoundProfilePhoto(photo: String?, name: String, size: Dp = 46.dp) {
             ).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
-            Text(name.take(1).uppercase())
+            Text(initials(name))
         }
     } else {
         Image(

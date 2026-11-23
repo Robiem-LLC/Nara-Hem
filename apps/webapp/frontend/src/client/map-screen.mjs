@@ -31,6 +31,7 @@ import { devices } from './devices-screen.mjs';
 import { placeState, publish } from './records.mjs';
 import { state } from './state.mjs';
 import { tripScreen } from './trips-screen.mjs';
+import { initials } from './initials.mjs';
 import { zoneTime } from './zones.mjs';
 
 /** Place thumbnail maps, reused between refreshes. */
@@ -782,7 +783,7 @@ function showMember(person, layout, profile, username) {
   return [f.lat, f.lon];
 }
 
-/** Creates a member's map icon: photo or initial and name, offset when grouped. */
+/** Creates a member's map icon: photo or initials and name, offset when grouped. */
 function memberIcon(name, profile, layout) {
   const icon = node('div');
   const nameLabel = node('span', name);
@@ -801,7 +802,7 @@ function memberIcon(name, profile, layout) {
     image.alt = '';
     icon.append(image);
   } else {
-    const initial = node('span', name.slice(0, 1).toUpperCase());
+    const initial = node('span', initials(name));
     initial.className = 'map-person-avatar';
     icon.append(initial);
   }

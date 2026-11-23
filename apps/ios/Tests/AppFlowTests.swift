@@ -61,12 +61,16 @@ final class AppFlowTests: XCTestCase {
 
     func testInvitationStepsReportTheServersMessage() async throws {
         let app = makeApp(signedIn: false)
-        app.signIn.requestInvite()
+        app.signIn.contact = "+14155550123"
+        app.signIn.enrollmentUsername = "John Doe"
+        app.signIn.enrollmentPassword = "a long synthetic password"
+        app.signIn.register()
         try await finishWork(app)
-        XCTAssertEqual(app.session.message, "Invitation email sent.")
-        app.signIn.verifyInvite()
-        try await finishWork(app)
-        XCTAssertEqual(app.session.message, "Invitation verified. Sign in and approve this device.")
+        // Registering signs straight in, on to approving this iPhone.
+        XCTAssertTrue(accounts.calls.contains("register"))
+        XCTAssertTrue(app.session.signedIn)
+        XCTAssertEqual(app.signIn.mode, "signin")
+        app.session.signedIn = false
         app.signIn.requestAccess()
         try await finishWork(app)
         XCTAssertEqual(app.session.message, "Request sent.")

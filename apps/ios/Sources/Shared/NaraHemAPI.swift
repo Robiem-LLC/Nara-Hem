@@ -206,12 +206,13 @@ final class NaraHemAPI {
 
     /// Changes the display name.
     func updateUsername(_ name: String) async throws -> String {
-        let proposed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let proposed = name.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard
-            proposed.range(of: #"^[A-Za-z0-9_.-]{3,64}$"#, options: .regularExpression) != nil
+            proposed.count >= 3, proposed.count <= 64,
+            proposed.range(of: #"^[\w.'-]+( [\w.'-]+)?$"#, options: .regularExpression) != nil
         else {
             throw NaraHemProtocolError.rejected(
-                "Use 3–64 letters, numbers, periods, dashes or underscores.")
+                "Use one or two words: 3–64 letters, numbers, periods, dashes or apostrophes.")
         }
         let result = try await accountRequest(
             "/api/account/username",
@@ -245,32 +246,14 @@ final class NaraHemAPI {
         }
     }
 
-    /// Asks the server for a new invitation link by email, or a code by text.
-    func requestInvite(server: String, contact: String) async throws -> String {
+    /// Registers the invited account with a username and password.
+    func register(server: String, contact: String, username: String, password: String)
+        async throws
+    {
         try setServer(server)
-        let result = try await publicRequest("/api/enrollment/request", payload: ["email": contact])
-        return (result["message"] as? String) ?? "Check your invitation"
-    }
-
-    /// Completes an invitation by setting the username and password. Takes the six-digit code
-    /// texted to the contact, or the email link or its token.
-    func verifyInvite(
-        server: String, contact: String, code: String, username: String, password: String
-    ) async throws {
-        try setServer(server)
-        let entered = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        var payload: [String: Any] = [
-            "username": username.isEmpty ? NSNull() : username as Any,
-            "password": password.isEmpty ? NSNull() : password as Any,
-        ]
-        if entered.count == 6, entered.allSatisfy(\.isASCII), entered.allSatisfy(\.isNumber) {
-            payload["email"] = contact
-            payload["code"] = entered
-        } else {
-            let link = entered.components(separatedBy: "#verify=").last ?? entered
-            payload["token"] = link.components(separatedBy: "&").first ?? link
-        }
-        _ = try await publicRequest("/api/enrollment/verify", payload: payload)
+        _ = try await publicRequest(
+            "/api/enrollment/register",
+            payload: ["email": contact, "username": username, "password": password])
     }
 
     /// Sends a request for the admin to invite this person.

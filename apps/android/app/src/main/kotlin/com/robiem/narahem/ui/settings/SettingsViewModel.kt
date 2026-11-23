@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.robiem.narahem.data.account.AccountRepository
 import com.robiem.narahem.data.account.ContactDetails
+import com.robiem.narahem.data.account.USERNAME_RULE
+import com.robiem.narahem.data.account.tidyUsername
 import com.robiem.narahem.data.account.validateServer
 import com.robiem.narahem.data.household.HouseholdRepository
 import com.robiem.narahem.tracking.TrackingController
@@ -72,7 +74,7 @@ class SettingsViewModel(
     override fun requestPhoneCode() = work {
         household?.sendPhoneCode()
         session.update {
-            it.copy(message = "Six-digit verification code sent by email. Expires in ten minutes.")
+            it.copy(message = "Six-digit code sent to your email or phone. Expires in ten minutes.")
         }
     }
 
@@ -114,10 +116,7 @@ class SettingsViewModel(
 
     /** Validates and saves a new display name. */
     override fun changeUsername(username: String) = work {
-        val proposed = username.trim()
-        require(proposed.matches(Regex("[A-Za-z0-9_.-]{3,64}"))) {
-            "Use a 3–64 character username with letters, numbers, dots, dashes or underscores."
-        }
+        val proposed = requireNotNull(tidyUsername(username)) { USERNAME_RULE }
         val reply = accounts.authenticated(
             "/api/account/username",
             org.json.JSONObject().put("username", proposed),

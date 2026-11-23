@@ -64,9 +64,8 @@ final class TrustedHousehold {
     func enroll(account: NaraHemAccount, server: String) async throws {
         let origin = try NaraHemAPI.serverURL(server).absoluteString
         if restore(account: account, server: origin) { return }
-        guard account.verified else {
-            throw NaraHemProtocolError.rejected("Administrator approval is required first")
-        }
+        // An account registered in the app isn't confirmed yet; the code that approves this
+        // phone confirms it, so it may register.
         let signing = try HouseholdCipher.signingKeys()
         let box = try HouseholdCipher.boxKeys()
         var fresh = TrustedIdentity(
@@ -114,7 +113,7 @@ final class TrustedHousehold {
 
     /// Determines this device's setup state from the server and the signed roster.
     func status(account: NaraHemAccount) async throws -> String {
-        guard identity != nil else { return account.verified ? "register" : "verify-email" }
+        guard identity != nil else { return "register" }
         let device: Wire.Object
         do { device = try await self.device("/api/device") } catch NaraHemProtocolError.http(
             let status, _) where status == 401

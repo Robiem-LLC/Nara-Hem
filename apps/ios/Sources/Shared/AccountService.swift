@@ -13,18 +13,13 @@ protocol AccountService: AnyObject {
     /// Changes the display name and returns the saved value.
     func updateUsername(_ name: String) async throws -> String
 
-    /// Asks the server for a new invitation link by email, or a code by text. Returns the
-    /// server's message.
-    func requestInvite(server: String, contact: String) async throws -> String
-
     /// Signs in with email and password and stores the refresh token.
     func signIn(server: String, identifier: String, password: String) async throws -> NaraHemAccount
 
-    /// Completes an invitation, with the email link or the code texted to the contact, by
-    /// setting the username and password.
-    func verifyInvite(
-        server: String, contact: String, code: String, username: String, password: String
-    ) async throws
+    /// Registers the account invited at this email address or phone number with a username and
+    /// password. It stays unconfirmed until the code sent when approving this phone.
+    func register(server: String, contact: String, username: String, password: String)
+        async throws
 
     /// Sends a request as the signed-in account.
     func accountRequest(

@@ -73,9 +73,10 @@ one. Check the spam folder too.
 
 Textbelt only sends links from domains it has approved, so Nära Hem's texts never contain any. An
 invitation text names your server's address and says to get the app from the phone's store; in
-the app, **Set up invited account → Send me a code** texts a six-digit code that sets up the
-account. Password reset links go by email only, so a member with only a phone number can't reset
-their password by text yet. **Admin settings → Text messages → Send test text** checks the key.
+the app, **Register new account** sets up the account, and the six-digit code texted when the
+phone is approved confirms it. Password reset links go by email only, so a member with only a
+phone number can't reset their password by text yet. **Admin settings → Text messages → Send test
+text** checks the key.
 
 ## No notifications on phones
 

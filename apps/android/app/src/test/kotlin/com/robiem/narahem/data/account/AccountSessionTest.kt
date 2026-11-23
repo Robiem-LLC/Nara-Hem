@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.robiem.narahem.data.FakeAndroidKeyStore
+import com.robiem.narahem.ui.components.initials
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
@@ -15,7 +16,6 @@ import okhttp3.tls.HeldCertificate
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -185,13 +185,20 @@ class AccountSessionTest {
         val verify = JSONObject(server.takeRequest().body.readUtf8())
         assertEquals("t".repeat(30), verify.getString("token"))
         assertTrue(verify.isNull("username"))
-        // A texted code goes with the phone number it was sent to.
+        // Registering sends the tidied two-word name with the invited number.
         reply("{}")
-        repo.completeEnrollment(address, " 123456 ", "sam", "p".repeat(20), "+14155550123")
-        val coded = JSONObject(server.takeRequest().body.readUtf8())
-        assertEquals("123456", coded.getString("code"))
-        assertEquals("+14155550123", coded.getString("email"))
-        assertFalse(coded.has("token"))
+        repo.register(address, " +14155550123 ", " John   Doe ", "p".repeat(20))
+        val registered = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("+14155550123", registered.getString("email"))
+        assertEquals("John Doe", registered.getString("username"))
+        for (name in listOf("John Q Doe", "ab", "J@hn")) {
+            assertThrows(AccountRequestException::class.java) {
+                runBlocking { repo.register(address, "+14155550123", name, "p".repeat(20)) }
+            }
+        }
+        assertEquals("JD", initials("John Doe"))
+        assertEquals("K", initials(" kim "))
+        assertEquals("?", initials(""))
     }
 
     @Test fun authenticatedRequestsCanUsePut() = runBlocking<Unit> {

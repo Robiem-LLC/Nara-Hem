@@ -9,22 +9,31 @@ final class ViewModelTests: XCTestCase {
     func testApprovalExplainsEachDeviceStatus() {
         let app = AppViewModel.preview(deviceStatus: "email-code")
         XCTAssertEqual(
-            app.approval.explanation, "Verify your account email to register this iPhone.")
+            app.approval.explanation,
+            "Confirm it's you with a code sent to your email or phone to register this iPhone.")
         app.session.deviceStatus = "revoked"
         XCTAssertTrue(app.approval.explanation.hasPrefix("This device was revoked"))
     }
 
-    func testInvitationNeedsTokenUsernameAndMatchingPasswords() {
+    func testInitialsAreTheFirstLetterOfEachWord() {
+        XCTAssertEqual(Initials.of("John Doe"), "JD")
+        XCTAssertEqual(Initials.of("kim"), "K")
+        XCTAssertEqual(Initials.of(" åsa  o'neil "), "ÅO")
+        XCTAssertEqual(Initials.of(""), "?")
+    }
+
+    func testRegisteringNeedsANameAndMatchingPasswords() {
         let model = AppViewModel.preview(signedIn: false).signIn
-        model.invitationCode = "token"
-        model.enrollmentUsername = "sam"
+        model.session.server = "https://family.example"
+        model.contact = "+14155550123"
+        model.enrollmentUsername = "John Doe"
         model.enrollmentPassword = "a long synthetic password"
         model.enrollmentConfirmPassword = "something else"
-        XCTAssertFalse(model.canConfirmInvitation)
+        XCTAssertFalse(model.canRegister)
         model.enrollmentConfirmPassword = model.enrollmentPassword
-        XCTAssertTrue(model.canConfirmInvitation)
-        model.enrollmentUsername = "s"
-        XCTAssertFalse(model.canConfirmInvitation)
+        XCTAssertTrue(model.canRegister)
+        model.enrollmentUsername = " s "
+        XCTAssertFalse(model.canRegister)
     }
 
     func testMapUsesSharedLocationsAndShowsTheLocalMarkerUntilOwnLocationArrives() {

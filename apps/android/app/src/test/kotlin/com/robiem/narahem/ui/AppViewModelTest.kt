@@ -93,8 +93,7 @@ class AppViewModelTest {
                     server: String,
                     token: String,
                     username: String,
-                    password: String,
-                    contact: String
+                    password: String
                 ) {
                     completed = true
                 }

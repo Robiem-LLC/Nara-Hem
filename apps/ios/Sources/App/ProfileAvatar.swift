@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// A member's profile photo in a circle, or a placeholder if they have none.
+/// A member's profile photo in a circle, or their initials ("JD") if they have none.
 struct ProfileAvatar: View {
     let member: HouseholdMember
 
@@ -9,8 +9,19 @@ struct ProfileAvatar: View {
         if let image = ProfilePhoto.image(member.photo) {
             Image(uiImage: image).resizable().scaledToFill().clipShape(Circle())
         } else {
-            Image(systemName: "person.crop.circle.fill").resizable().scaledToFit()
-                .foregroundStyle(accent)
+            GeometryReader { box in
+                let side = min(box.size.width, box.size.height)
+                Circle().fill(accent)
+                    .overlay(
+                        Text(Initials.of(member.name))
+                            .font(.system(size: side * 0.38, weight: .bold))
+                            .foregroundStyle(.black)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                    )
+                    .frame(width: side, height: side)
+            }
+            .aspectRatio(1, contentMode: .fit)
         }
     }
 }
