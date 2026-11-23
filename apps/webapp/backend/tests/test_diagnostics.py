@@ -80,7 +80,7 @@ class DiagnosticsReportTests(unittest.TestCase):
             '"unreadable": 1}',
             text,
         )
-        self.assertNotIn("51.5", text)
+        self.assertNotIn("51.5072981", text)
 
     def test_gps_receipts_are_listed_by_device_without_coordinates(self):
         text = self.report("gps")
@@ -103,7 +103,9 @@ class DiagnosticsReportTests(unittest.TestCase):
                 "trip.road_match",
                 account=self.owner_id,
                 stage="roads",
-                lat=51.5,
+                # Seven decimals, more than any timestamp in the report has, so a clock time
+                # can never look like it.
+                lat=51.5072981,
                 reason="x" * 200,
                 attempts=2,
             )
