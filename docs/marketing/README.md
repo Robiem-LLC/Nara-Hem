@@ -11,6 +11,8 @@ What to upload to each store. Everything here is made by
 
 ## `android/` (Google Play Console)
 
+- `play-icon.png` (512 × 512): the app icon, the iPhone icon scaled down. Play rounds the
+  corners itself, so it's a full square.
 - `feature-graphic.png` (1024 × 500): the feature graphic.
 - `screenshots/` (1080 × 1920): the phone screenshots.
 
