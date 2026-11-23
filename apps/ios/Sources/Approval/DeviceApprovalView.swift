@@ -78,13 +78,13 @@ struct DeviceApprovalView: View {
                 Section { Button("Sign out", role: .destructive) { model.signOut() } }
                 NoticeView(session: model.session)
             }.navigationTitle("Trust this iPhone")
-            // Registers straight away, as Android does, so the next screen is the code. If it
-            // fails, the button stays to try again.
-            .task(id: model.session.deviceStatus) {
-                if model.session.deviceStatus == "register", !model.session.busy {
-                    model.enrollDevice()
+                // Registers straight away, as Android does, so the next screen is the code. If it
+                // fails, the button stays to try again.
+                .task(id: model.session.deviceStatus) {
+                    if model.session.deviceStatus == "register", !model.session.busy {
+                        model.enrollDevice()
+                    }
                 }
-            }
         }
     }
 }
