@@ -787,7 +787,9 @@ def create_app(
                 f"Or set up your account in a browser within 30 minutes:\n{link}\n\n"
                 "Setting up your account doesn't share anyone's location."
             ),
-            texting.invitation(db.get(Settings, 1).household or "", public_url),
+            texting.invitation(
+                db.get(Settings, 1).household or "", public_url, db.get(Settings, 1).sms_links
+            ),
         )
 
     def issue_password_reset(db, account):

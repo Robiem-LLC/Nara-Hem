@@ -519,6 +519,11 @@ function textingCard(texting, user) {
     document.getElementById('remove-texting').hidden = false;
   }
   document.getElementById('check-texting').disabled = !texting.source;
+  const links = document.getElementById('texting-links');
+  links.checked = Boolean(texting.links_allowed);
+  document.getElementById('texting-address').textContent = texting.texted_address
+    ? `Texts name this server as ${texting.texted_address}.`
+    : '';
   const refresh = async (message) => {
     textingOn = (await api('/api/setup')).texting;
     await dashboard(user);
@@ -545,6 +550,15 @@ function textingCard(texting, user) {
     try {
       await refresh(saved(await api('/api/texting', 'PUT', { key: '' })));
     } catch (e) {
+      notice(e.message);
+    }
+  };
+  links.onchange = async () => {
+    try {
+      const result = await api('/api/texting/links', 'PUT', { allowed: links.checked });
+      await refresh(`Texts now name this server as ${result.texted_address}.`);
+    } catch (e) {
+      links.checked = !links.checked;
       notice(e.message);
     }
   };

@@ -381,9 +381,8 @@
           <p class="subtle">
             With a
             <a href="https://textbelt.com" target="_blank" rel="noopener noreferrer">Textbelt</a>
-            key, your server can invite people by phone number and text them sign-in codes and reset
-            links. Without one it uses email only. Phone numbers, codes and links pass through
-            Textbelt.
+            key, your server can invite people by phone number and text them sign-in codes. Without
+            one it uses email only. Phone numbers, invitations and codes pass through Textbelt.
           </p>
           <p><span class="pill" id="texting-status"></span></p>
           <form id="texting">
@@ -408,9 +407,12 @@
             <button type="submit" id="save-texting">Save key</button>
           </form>
           <div class="links">
-            <button id="check-texting" class="secondary">Check key</button
+            <label class="trip-preview-toggle"
+              ><input type="checkbox" id="texting-links" /> Domain whitelisted</label
+            ><button id="check-texting" class="secondary">Check key</button
             ><button id="remove-texting" class="secondary" hidden>Remove key</button>
           </div>
+          <p class="subtle" id="texting-address"></p>
           <form id="texting-test">
             <label for="texting-test-phone">Send a test text to</label
             ><input id="texting-test-phone" name="phone" type="tel" required /><button
@@ -421,9 +423,11 @@
             </button>
           </form>
           <p class="subtle">
-            Texts never contain links, so Textbelt doesn't need to approve anything. An invitation
-            text names this server, where the person registers in the app. Password reset links go
-            by email only.
+            Textbelt refuses anything that looks like a link, a bare address included, until it
+            whitelists your domain. Until then, leave <strong>Domain whitelisted</strong> off and
+            texts write the server's address with &lt;.&gt; for each dot, which the apps accept as
+            typed. Tick it once Textbelt has whitelisted the domain. Password reset links go by
+            email only.
           </p>
         </section>
         <section class="card" id="relays-card">

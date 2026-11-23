@@ -39,9 +39,10 @@ def phone_number(value):
     return digits
 
 
-def invitation(household, public_url):
-    """Returns the invitation text. Textbelt refuses links, so it names the server's address
-    with its dots written as <.>, and the person registers in the app with it.
+def invitation(household, public_url, links=False):
+    """Returns the invitation text. It names the server's address (its NARAHEM_PUBLIC_URL
+    without https://), where the person registers in the app: plainly once Textbelt has
+    whitelisted the domain (links), otherwise with its dots written as <.>.
     """
     name = household.strip() or "a Nära Hem"
     if not name.lower().endswith("family"):
@@ -49,7 +50,7 @@ def invitation(household, public_url):
     return (
         f"You have been invited to {name} locator.\n"
         "Please download Nära Hem (Nara Hem) off your devices official store.\n"
-        f"Create your account using {spoken_address(public_url)} and your phone number."
+        f"Create your account using {texted_address(public_url, links)} and your phone number."
     )
 
 
@@ -71,6 +72,13 @@ def environment_key():
 def hint(key):
     """Returns a masked key that shows only its last four characters."""
     return "•" * 8 + key[-4:] if len(key) > 8 else "•" * 8
+
+
+def texted_address(public_url, links=False):
+    """Returns the server's address as texts write it: plainly once Textbelt has whitelisted the
+    domain, otherwise with <.> for each dot.
+    """
+    return urlsplit(public_url).netloc if links else spoken_address(public_url)
 
 
 def spoken_address(public_url):

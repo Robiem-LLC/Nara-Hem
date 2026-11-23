@@ -188,6 +188,11 @@ def install(
 
         key: str = Field(default="", max_length=256)
 
+    class TextingLinksInput(Input):
+        """Whether Textbelt has whitelisted this server's domain."""
+
+        allowed: bool
+
     class TextTestInput(Input):
         """Where to send a test text."""
 
@@ -206,6 +211,9 @@ def install(
             "quota": settings.sms_quota if checked else None,
             "error": settings.sms_error if checked else None,
             "checked_at": settings.sms_checked if checked else None,
+            # Whether texts name the server plainly (Textbelt whitelisted it) or with <.>.
+            "links_allowed": settings.sms_links,
+            "texted_address": texting.texted_address(public_url, settings.sms_links),
         }
 
     @app.get("/api/texting")
@@ -229,6 +237,17 @@ def install(
         check_texting(db)
         return texting_status(db)
 
+    @app.put("/api/texting/links")
+    def save_texting_links(
+        body: TextingLinksInput, auth=Depends(admin), db: Session = Depends(database)
+    ):
+        """Records whether Textbelt has whitelisted this server's domain. When it has, texts name
+        the server plainly; otherwise its dots are written as <.>.
+        """
+        db.get(Settings, 1).sms_links = body.allowed
+        db.commit()
+        return texting_status(db)
+
     @app.post("/api/texting/check")
     def recheck_texting(request: Request, auth=Depends(admin), db: Session = Depends(database)):
         """Checks the key in use with Textbelt again."""
@@ -240,15 +259,17 @@ def install(
     def test_text(
         body: TextTestInput, request: Request, auth=Depends(admin), db: Session = Depends(database)
     ):
-        """Sends a test text. It has no links, like every text Nära Hem sends, since Textbelt only
-        sends links from domains it has approved.
+        """Sends a test text naming the server the way invitations do, so it also shows whether
+        Textbelt accepts the address once the domain is marked whitelisted.
         """
         rate(request, "texting-test", 5)
         try:
             send_text(
                 db,
                 texting.phone_number(body.phone),
-                "Nära Hem: text messages from your household's server are working.",
+                "Nära Hem: text messages from "
+                + texting.texted_address(public_url, db.get(Settings, 1).sms_links)
+                + " are working.",
             )
         except texting.TextingError as error:
             db.commit()

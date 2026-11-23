@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +30,8 @@ class Settings(Base):
     sms_quota: Mapped[int | None] = mapped_column(Integer)
     sms_error: Mapped[str | None] = mapped_column(Text)
     sms_checked: Mapped[float | None] = mapped_column(Float)
+    # True once Textbelt has whitelisted this server's domain, so texts may name it plainly.
+    sms_links: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class Outbox(Base):

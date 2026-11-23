@@ -283,6 +283,33 @@ class TextingTests(unittest.TestCase):
             texting.scrub("Key secret-key is bad", "secret-key"), "Key •••••••• is bad"
         )
 
+    def test_a_whitelisted_domain_is_texted_plainly(self):
+        self.turn_on()
+        status = self.client.get("/api/texting").json()
+        self.assertEqual(
+            (status["links_allowed"], status["texted_address"]),
+            (False, "narahem<.>example<.>invalid"),
+        )
+        self.client.post("/api/invitations", json={"email": KIM})
+        self.assertIn("using narahem<.>example<.>invalid and", self.texts.sent[-1][1])
+        self.client.post("/api/texting/test", json={"phone": KIM})
+        self.assertIn("from narahem<.>example<.>invalid are working", self.texts.sent[-1][1])
+        # Once Textbelt whitelists the domain, the address is the server's own, without https://.
+        saved = self.client.put("/api/texting/links", json={"allowed": True}).json()
+        self.assertEqual(
+            (saved["links_allowed"], saved["texted_address"]), (True, "narahem.example.invalid")
+        )
+        self.client.post("/api/invitations", json={"email": "+1 415 555 0199"})
+        self.assertIn("using narahem.example.invalid and", self.texts.sent[-1][1])
+        self.assertNotIn("https://", self.texts.sent[-1][1])
+        self.client.post("/api/texting/test", json={"phone": KIM})
+        self.assertIn("from narahem.example.invalid are working", self.texts.sent[-1][1])
+        # Only the administrator can change it.
+        self.client.post("/api/logout", json={})
+        self.assertEqual(
+            self.client.put("/api/texting/links", json={"allowed": False}).status_code, 401
+        )
+
     def test_phone_numbers_are_stored_in_one_form(self):
         for given in ("4155550123", "14155550123", "+1 (415) 555-0123", "415.555.0123"):
             self.assertEqual(texting.phone_number(given), KIM)
