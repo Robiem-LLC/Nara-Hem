@@ -23,9 +23,14 @@ browsers only get household data once they've been approved.
 
 ## Roadmap
 
-- Looking for a replacement for textbelt. They are proving to not be as responsive as they
-  say. If keeping them as the sms provider I am _trying_ to get automatic whitelisting for
-  accounts created through a Nära Hem link.
+- Texting goes through Textbelt, which refuses anything that looks like a link until it
+  whitelists your domain. What's in place: texts never carry links. An invitation names your
+  server's address (its `NARAHEM_PUBLIC_URL` without `https://`) with each dot written as `<.>`,
+  which the apps accept as typed, and the person taps **Register new account** in the app; the
+  six-digit code texted when their phone is approved confirms the account. Once Textbelt
+  whitelists your domain, tick **Domain whitelisted** in Admin settings → Text messages and
+  texts name it plainly. Password reset links go by email only. Still looking for a more
+  responsive replacement for Textbelt.
 - I would like to get ALL of the cloudflare workers off the cloud with out exposing keys. So
   if I were to kick it these features don't just die... I did try to leave clear adjacent
   instruction on replacating then and the code with it, because it looks like even amazon

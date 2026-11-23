@@ -71,14 +71,20 @@ one. Check the spam folder too.
 
 ## Texts and links
 
-Textbelt refuses links, a bare address like `family.example.com` included, so Nära Hem's texts
-never contain any. An invitation text writes your server's address with each dot as `<.>`
+Textbelt refuses links, a bare address like `family.example.com` included, until it whitelists
+your domain, so Nära Hem's texts never contain any. An invitation text names your server's
+address, its `NARAHEM_PUBLIC_URL` without `https://`, with each dot written as `<.>`
 (`family<.>example<.>com`), which the apps accept as typed, and says to get the app from the
-phone's store; in
-the app, **Register new account** sets up the account, and the six-digit code texted when the
-phone is approved confirms it. Password reset links go by email only, so a member with only a
-phone number can't reset their password by text yet. **Admin settings → Text messages → Send test
-text** checks the key.
+phone's store. In the app, **Register new account** sets up the account, and the six-digit code
+texted when the phone is approved confirms it.
+
+If Textbelt whitelists your domain, tick **Domain whitelisted** in **Admin settings → Text
+messages**, and texts name the address plainly (`family.example.com`). The card shows the address
+texts will use, and **Send test text** names it the same way, so one test shows whether Textbelt
+accepts it. If it says links aren't allowed, untick the box.
+
+Password reset links go by email only, so a member with only a phone number can't reset their
+password by text yet.
 
 ## No notifications on phones
 
