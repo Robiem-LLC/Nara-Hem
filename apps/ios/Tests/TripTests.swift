@@ -178,4 +178,25 @@ final class TripTests: XCTestCase {
         XCTAssertEqual(location.accuracy, 12)
         XCTAssertTrue(location.capturedAt <= Date())
     }
+
+    func testTheMarkerOnlyMovesBeyondTheMarginOfError() {
+        let shown = LocalLocation(
+            CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: 40.124, longitude: -74.245),
+                altitude: 0, horizontalAccuracy: 20, verticalAccuracy: 10,
+                timestamp: Date(timeIntervalSinceNow: -30)))
+        // About 15 m away, inside a 20 m margin: drift, so the marker stays.
+        let drift = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 40.12413, longitude: -74.245),
+            altitude: 0, horizontalAccuracy: 25, verticalAccuracy: 10, timestamp: Date())
+        XCTAssertFalse(LocalLocation.moved(from: shown, to: drift))
+        let refreshed = shown.refreshed(at: drift.timestamp)
+        XCTAssertEqual(refreshed.latitude, shown.latitude)
+        XCTAssertEqual(refreshed.capturedAt, drift.timestamp)
+        // About 110 m away: real movement.
+        let walked = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 40.125, longitude: -74.245),
+            altitude: 0, horizontalAccuracy: 10, verticalAccuracy: 10, timestamp: Date())
+        XCTAssertTrue(LocalLocation.moved(from: shown, to: walked))
+    }
 }

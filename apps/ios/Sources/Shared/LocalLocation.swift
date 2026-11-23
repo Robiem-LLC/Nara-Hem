@@ -9,7 +9,7 @@ struct LocalLocation: Codable, Identifiable {
     let latitude: Double
     let longitude: Double
     let accuracy: Double
-    let capturedAt: Date
+    var capturedAt: Date
     let speedMps: Double?
     let batteryPct: Int?
     let charging: Bool?
@@ -31,5 +31,19 @@ struct LocalLocation: Codable, Identifiable {
         self.batteryPct = batteryPct
         self.charging = charging
         self.tripId = tripId
+    }
+
+    /// Returns true if the fix is farther from the reading than either's margin of error, and at
+    /// least 10 m, so it shows real movement rather than drift.
+    static func moved(from reading: LocalLocation, to fix: CLLocation) -> Bool {
+        let shown = CLLocation(latitude: reading.latitude, longitude: reading.longitude)
+        return fix.distance(from: shown) > max(10, reading.accuracy, fix.horizontalAccuracy)
+    }
+
+    /// Returns the same reading, captured at the given time.
+    func refreshed(at time: Date) -> LocalLocation {
+        var reading = self
+        reading.capturedAt = time
+        return reading
     }
 }

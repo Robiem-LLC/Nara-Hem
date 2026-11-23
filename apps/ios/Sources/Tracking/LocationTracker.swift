@@ -342,17 +342,26 @@ final class LocationTracker: NSObject, CLLocationManagerDelegate {
     }
 
     /// Updates the local map position with the newest accurate fix. This never triggers an upload.
+    /// A fix within the readings' margin of error of the shown one (at least 10 m) only refreshes
+    /// its time, so the marker stays still while the phone does, rather than following the drift
+    /// of fixes indoors.
     private func showNewest(_ locations: [CLLocation]) {
-        if let newest = locations.filter({
-            $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy <= 75
-                && $0.timestamp.timeIntervalSinceNow >= -45
-                && $0.timestamp.timeIntervalSinceNow <= 10
-                && CLLocationCoordinate2DIsValid($0.coordinate)
-        }).max(by: { $0.timestamp < $1.timestamp }),
-            lastFix == nil || newest.timestamp > lastFix!.capturedAt
-        {
+        guard
+            let newest = locations.filter({
+                $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy <= 75
+                    && $0.timestamp.timeIntervalSinceNow >= -45
+                    && $0.timestamp.timeIntervalSinceNow <= 10
+                    && CLLocationCoordinate2DIsValid($0.coordinate)
+            }).max(by: { $0.timestamp < $1.timestamp })
+        else { return }
+        guard let shown = lastFix else {
             lastFix = LocalLocation(newest)
+            return
         }
+        guard newest.timestamp > shown.capturedAt else { return }
+        lastFix =
+            LocalLocation.moved(from: shown, to: newest)
+            ? LocalLocation(newest) : shown.refreshed(at: newest.timestamp)
     }
 
     /// Passes a fix to the trip recorder and queues it if the sampling interval allows.
