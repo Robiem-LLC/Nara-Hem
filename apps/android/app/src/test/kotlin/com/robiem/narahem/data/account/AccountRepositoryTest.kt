@@ -30,6 +30,11 @@ class AccountRepositoryTest {
             "https://example.invalid:8443/",
             serverOrigin(" https://example.invalid:8443 ").toString()
         )
+        // Typed just as the invitation text writes it.
+        assertEquals(
+            "https://nara-hem.family.example/",
+            serverOrigin("nara-hem<.>family < . > example").toString()
+        )
         assertEquals(
             "https://example.invalid:8443/",
             serverOrigin(" example.invalid:8443 ").toString()

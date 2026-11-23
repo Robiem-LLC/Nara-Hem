@@ -41,7 +41,10 @@ final class NaraHemAPI {
     /// Parses a typed server address into an HTTPS URL. Throws a user-facing error if it is
     /// invalid.
     static func serverURL(_ entered: String) throws -> URL {
-        let input = entered.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Invitation texts write each dot as <.> so Textbelt doesn't take the address for a link.
+        let input = entered.replacingOccurrences(
+            of: #"\s*<\s*\.\s*>\s*"#, with: ".", options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
         guard
             var pieces = URLComponents(string: input.contains("://") ? input : "https://" + input),
             pieces.scheme?.lowercased() == "https", !(pieces.host ?? "").isEmpty,

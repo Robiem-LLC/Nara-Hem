@@ -8,7 +8,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * user-facing message if it's invalid.
  */
 fun serverOrigin(raw: String): HttpUrl {
-    val entered = raw.trim()
+    // Invitation texts write each dot as <.> so Textbelt doesn't take the address for a link.
+    val entered = raw.replace(Regex("\\s*<\\s*\\.\\s*>\\s*"), ".").trim()
     require(entered.isNotEmpty()) {
         "Enter your household server address, for example https://family.example.com."
     }

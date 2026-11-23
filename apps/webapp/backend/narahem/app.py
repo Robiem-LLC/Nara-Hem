@@ -742,10 +742,6 @@ def create_app(
         try:
             settings.sms_quota = texter.send(key, phone, body)
         except texting.TextingError as error:
-            if error.reason:
-                # Name this server's own domains in the advice about links.
-                domains = texting.link_domains(public_url, app_links())
-                error = texting.TextingError(texting.describe(error.reason, domains), error.reason)
             settings.sms_error = str(error)
             raise error from None
 

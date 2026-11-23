@@ -154,7 +154,7 @@ class TextingTests(unittest.TestCase):
             message,
             "You have been invited to Test household family locator.\n"
             "Please download Nära Hem (Nara Hem) off your devices official store.\n"
-            "Create your account using narahem.example.invalid and your phone number.",
+            "Create your account using narahem<.>example<.>invalid and your phone number.",
         )
         # The app registers the account; the text carries no link or code.
         verified = self.client.post(
@@ -206,7 +206,7 @@ class TextingTests(unittest.TestCase):
         self.assertEqual(invited["channels"], ["email", "text"])
         self.assertEqual(self.mail[-1][1], "kim@example.invalid", "the email still went")
         self.assertEqual(list(invited["problems"]), ["text"])
-        self.assertIn("textbelt.com/whitelist", invited["problems"]["text"])
+        self.assertIn("carry no links", invited["problems"]["text"])
         self.assertEqual(invited["delivery"], "pending")
         # Once Textbelt takes it, a retry sends it and the reply has no problems.
         self.texts.refuse = None
@@ -230,7 +230,7 @@ class TextingTests(unittest.TestCase):
         text = self.texts.sent[-1][1]
         self.assertNotIn("http", text)
         self.assertIn("official store", text)
-        self.assertIn("using narahem.example.invalid and your phone number", text)
+        self.assertIn("using narahem<.>example<.>invalid and your phone number", text)
         # A household already called a family isn't a "family family".
         self.assertIn("to The Lees family locator.", texting.invitation("The Lees family", PUBLIC))
         self.assertIn("to The Lees family locator.", texting.invitation("The Lees", PUBLIC))
@@ -269,14 +269,18 @@ class TextingTests(unittest.TestCase):
         self.texts.refuse = "Sorry, URLs are not allowed for this key."
         refused = self.client.post("/api/texting/test", json={"phone": KIM})
         self.assertEqual(refused.status_code, 424)
-        # It names this server's own domain, the app download links' and the app stores'.
-        domains = "narahem.example.invalid, apps.example.invalid, apps.apple.com, play.google.com"
-        self.assertIn("textbelt.com/whitelist, listing " + domains + ".", refused.json()["detail"])
-        listed = self.client.get("/api/texting").json()["link_domains"]
-        self.assertEqual(", ".join(listed), domains)
+        self.assertIn("Nära Hem's texts carry no links", refused.json()["detail"])
+        self.assertNotIn("link_domains", self.client.get("/api/texting").json())
+        # Textbelt's refusal links to its whitelist with the key in it; the key never shows.
+        said = (
+            "Sorry, URLs are limited. Please go to https://textbelt.com/whitelist?key=secret-key "
+            "or email support@textbelt.com."
+        )
+        cleaned = texting.scrub(said, "secret-key")
+        self.assertNotIn("secret-key", cleaned)
+        self.assertIn("https://textbelt.com/whitelist or email", cleaned)
         self.assertEqual(
-            texting.link_domains("https://home.example.invalid", ("https://apps.apple.com/x",)),
-            ["home.example.invalid", "apps.apple.com", "play.google.com"],
+            texting.scrub("Key secret-key is bad", "secret-key"), "Key •••••••• is bad"
         )
 
     def test_phone_numbers_are_stored_in_one_form(self):

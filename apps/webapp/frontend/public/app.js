@@ -1062,7 +1062,7 @@ function memberCard(account, user) {
     status.textContent = account.status === 'revoked' ? 'Access revoked' : 'Account pending';
     info.append(status);
   } else if (!account.verified) {
-    status.textContent = 'Email verification pending';
+    status.textContent = 'Not confirmed yet: waiting for the code sent to their email or phone';
     info.append(status);
   }
   indicators.setAttribute('aria-label', 'Last reported phone status');

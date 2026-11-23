@@ -14,8 +14,6 @@ from fastapi import HTTPException
 
 ENVIRONMENT_KEY = "NARAHEM_TEXTBELT_KEY"
 TEXTBELT = "https://textbelt.com"
-# Where the apps will be downloaded once they are in the stores.
-STORE_DOMAINS = ("apps.apple.com", "play.google.com")
 
 
 class TextingError(Exception):
@@ -42,8 +40,8 @@ def phone_number(value):
 
 
 def invitation(household, public_url):
-    """Returns the invitation text. Textbelt only sends links from domains it has approved, so
-    it names the server's address rather than linking to it, and the app texts a code instead.
+    """Returns the invitation text. Textbelt refuses links, so it names the server's address
+    with its dots written as <.>, and the person registers in the app with it.
     """
     name = household.strip() or "a Nära Hem"
     if not name.lower().endswith("family"):
@@ -51,7 +49,7 @@ def invitation(household, public_url):
     return (
         f"You have been invited to {name} locator.\n"
         "Please download Nära Hem (Nara Hem) off your devices official store.\n"
-        f"Create your account using {urlsplit(public_url).netloc} and your phone number."
+        f"Create your account using {spoken_address(public_url)} and your phone number."
     )
 
 
@@ -75,28 +73,29 @@ def hint(key):
     return "•" * 8 + key[-4:] if len(key) > 8 else "•" * 8
 
 
-def link_domains(public_url, links=()):
-    """Returns the domains this server's texts link to, for Textbelt's whitelist: the server's
-    own address, the app download links in invitations and the app stores.
+def spoken_address(public_url):
+    """Returns the server's address with each dot written as <.>, such as
+    nara-hem<.>example<.>com. Textbelt refuses anything that looks like a link, a bare address
+    included, and the apps turn <.> back into a dot.
     """
-    domains = []
-    for url in (public_url, *links):
-        host = urlsplit(url or "").hostname
-        if host and host not in domains:
-            domains.append(host)
-    return domains + [d for d in STORE_DOMAINS if d not in domains]
+    return urlsplit(public_url).netloc.replace(".", "<.>")
 
 
-def describe(error, domains=()):
-    """Turns a Textbelt error into advice for the administrator, naming the domains to whitelist
-    when links were refused.
+def scrub(text, key=None):
+    """Removes the key, and any link's query string where Textbelt puts it, from its words. Keys
+    too short to be real are left alone, so ordinary words aren't masked.
     """
+    text = re.sub(r"(https?://\S+?)\?\S*", r"\1", str(text or ""))
+    return text.replace(key, "•" * 8) if key and len(key) >= 8 else text
+
+
+def describe(error):
+    """Turns a Textbelt error into advice for the administrator."""
     text = str(error or "").strip() or "Textbelt did not say why"
     if re.search(r"url|link", text, re.IGNORECASE):
-        listing = ", ".join(domains) or "your server's address and the app download sites"
         return (
-            text + " Textbelt only sends links once your key is approved for them: request it at "
-            f"textbelt.com/whitelist, listing {listing}."
+            text + " Nära Hem's texts carry no links, so Textbelt took something in the text for "
+            "one. Ask Textbelt at support@textbelt.com which part."
         )
     return text
 
@@ -116,7 +115,8 @@ class Textbelt:
         except (httpx.HTTPError, ValueError) as error:
             raise TextingError("Textbelt could not be reached") from error
         if not data.get("success"):
-            raise TextingError(describe(data.get("error")), data.get("error"))
+            reason = scrub(data.get("error"), key)
+            raise TextingError(describe(reason), reason)
         return int(data.get("quotaRemaining", 0))
 
     def send(self, key, phone, message):
@@ -131,5 +131,6 @@ class Textbelt:
         except (httpx.HTTPError, ValueError) as error:
             raise TextingError("Textbelt could not be reached") from error
         if not data.get("success"):
-            raise TextingError(describe(data.get("error")), data.get("error"))
+            reason = scrub(data.get("error"), key)
+            raise TextingError(describe(reason), reason)
         return int(data.get("quotaRemaining", 0))

@@ -38,6 +38,10 @@ final class NaraHemAPITests: XCTestCase {
             try NaraHemAPI.serverURL(" family.example:8443 ").absoluteString,
             "https://family.example:8443")
         XCTAssertEqual(try NaraHemAPI.serverURL("https://family.example/").host, "family.example")
+        // Typed just as the invitation text writes it.
+        XCTAssertEqual(
+            try NaraHemAPI.serverURL("nara-hem<.>family < . > example").absoluteString,
+            "https://nara-hem.family.example")
         for bad in [
             "http://family.example", "https://user:pw@family.example", "https://family.example/x",
             "https://family.example?q=1", "https://family.example#f", "",
