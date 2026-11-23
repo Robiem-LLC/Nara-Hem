@@ -29,8 +29,11 @@ from narahem.models import (
 from narahem.schemas import (
     RecordInput,
 )
-from narahem.trip_processing import normalize_points
+from narahem.trip_processing import meters, normalize_points
 from narahem.zones import zone_name
+
+# A trip that sets off within this distance of where the previous one ended starts there.
+ANCHOR_METERS = 250
 
 
 def install(
@@ -58,6 +61,49 @@ def install(
     """Registers this module's routes. The keyword arguments are shared helpers from
     device_api.install().
     """
+
+    def anchor_starts(db, rows, trips, device):
+        """Starts each trip where the person's previous trip ended, when that's within
+        ANCHOR_METERS. Phones only notice movement a little after someone sets off, so otherwise
+        "left" would sit a short way down the road from where they "arrived". Changes the trips
+        in place and returns, by event id, the previous trip's arrival name to use as the start.
+        """
+        names = {}
+        for row, trip in zip(rows, trips):
+            start = trip.get("start")
+            previous = db.scalar(
+                select(IndexedTrip)
+                .where(
+                    IndexedTrip.account_id == row.account_id,
+                    IndexedTrip.ended_at <= row.started_at,
+                    IndexedTrip.event_id != row.event_id,
+                    IndexedTrip.status.in_(("ready", "raw")),
+                    IndexedTrip.encrypted_trip.is_not(None),
+                )
+                .order_by(IndexedTrip.ended_at.desc())
+                .limit(1)
+            )
+            if not start or not previous or not trip_visible(db, previous, device):
+                continue
+            before = json.loads(cipher.decrypt(previous.encrypted_trip.encode()))
+            end = before.get("end")
+            if not end:
+                continue
+            gap = meters({"lat": end[0], "lon": end[1]}, {"lat": start[0], "lon": start[1]})
+            if gap > ANCHOR_METERS:
+                continue
+            trip["start"] = list(end)
+            route = trip.get("route")
+            if isinstance(route, list) and route and list(route[0]) != list(end):
+                trip["route"] = [list(end), *route]
+                if isinstance(trip.get("times"), list) and trip["times"]:
+                    trip["times"] = [trip["times"][0], *trip["times"]]
+            if isinstance(trip.get("distance_m"), (int, float)):
+                trip["distance_m"] = round(trip["distance_m"] + gap, 2)
+            name = trip_endpoint_labels(db, [previous], [before])[previous.event_id]
+            if name.get("end_label"):
+                names[row.event_id] = name["end_label"]
+        return names
 
     @app.get("/api/profile/current")
     def own_profile_pointer(device=Depends(approved), db: Session = Depends(database)):
@@ -394,7 +440,10 @@ def install(
         if include_routes:
             fields += ("route",)
         trips = [json.loads(cipher.decrypt(row.encrypted_trip.encode())) for row in rows]
+        arrived = anchor_starts(db, rows, trips, device)
         labels = trip_endpoint_labels(db, rows, trips)
+        for event_id, name in arrived.items():
+            labels[event_id]["start_label"] = name
 
         def summary(row, decrypted):
             """Returns one trip in the trip list format."""
@@ -440,7 +489,6 @@ def install(
         if record.expires_at is not None and record.expires_at <= time.time():
             raise HTTPException(404, "Trip expired")
         trip = json.loads(cipher.decrypt(row.encrypted_trip.encode()))
-        labels = trip_endpoint_labels(db, [row], [trip])[row.event_id]
         if not trip.get("matched") and not trip.get("gps_route"):
             fixes = device_fixes(
                 db, row.account_id, row.device_id, row.started_at, row.ended_at, row.trip_id
@@ -461,6 +509,10 @@ def install(
                         json.dumps(trip, separators=(",", ":")).encode()
                     ).decode()
                     db.commit()
+        arrived = anchor_starts(db, [row], [trip], device)
+        labels = trip_endpoint_labels(db, [row], [trip])[row.event_id]
+        if row.event_id in arrived:
+            labels["start_label"] = arrived[row.event_id]
         return trip | labels
 
     @app.get("/api/view")

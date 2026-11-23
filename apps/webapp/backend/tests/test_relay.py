@@ -603,6 +603,47 @@ class RelayTests(unittest.TestCase):
         )
         self.assertEqual(listed()["start_label"], "Work")
 
+    def test_a_trip_leaves_from_where_the_last_one_arrived(self):
+        a, b = self.alert_pair()
+        now = int(time.time() * 1000)
+
+        def trip(started, ended, start, end):
+            summary = {
+                "type": "trip_summary",
+                "account_id": a["account_id"],
+                "started_at": started,
+                "ended_at": ended,
+                "trip_id": secrets.token_hex(16),
+                "distance_m": 3000,
+                "max_speed_mps": 15,
+                "samples": 30,
+                "start": start,
+                "end": end,
+            }
+            return self.publish(a, kind="event", captured=ended, data=summary)["body"]["id"]
+
+        # Arrived at the shop; movement was noticed ~130 m down the road when leaving it.
+        trip(now - 90 * 60000, now - 80 * 60000, [40.1, -74.1], [40.03, -74.0])
+        left = trip(now - 40 * 60000, now - 30 * 60000, [40.0312, -74.0], [40.2, -74.2])
+        # This one sets off 2 km from where the last ended, which is a real gap.
+        far = trip(now - 20 * 60000, now - 10 * 60000, [40.22, -74.2], [40.3, -74.3])
+        with patch(
+            "narahem.household_alerts.lookup_address",
+            side_effect=lambda lat, lon, *rest, **named: f"near {lat:.4f},{lon:.4f}",
+        ):
+            for _ in range(4):
+                self.app.state.maintenance()
+        url = f"/api/trips?account_id={a['account_id']}&start={now - 100 * 60000}&end={now}"
+        listed = {t["id"]: t for t in self.call(b, "GET", url).json()["trips"]}
+        self.assertEqual(listed[left]["start"], [40.03, -74.0])
+        self.assertEqual(listed[left]["start_label"], "near 40.0300,-74.0000")
+        self.assertGreater(listed[left]["distance_m"], 3100, "the stretch before it's noticed")
+        self.assertEqual(listed[far]["start"], [40.22, -74.2])
+        opened = self.call(b, "GET", f"/api/trips/{left}").json()
+        self.assertEqual(
+            (opened["start"], opened["start_label"]), ([40.03, -74.0], "near 40.0300,-74.0000")
+        )
+
     def test_trip_labels_retry_failed_lookups_then_give_up(self):
         from narahem.models import TripLabel
 
