@@ -135,5 +135,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(image["if"], "github.ref == 'refs/heads/main'")
         linux = workflow("android-tests.yaml")["jobs"]["unit-tests"]["steps"]
         checks = next(s for s in linux if s.get("name", "").startswith("Kotlin style"))
-        for task in ("testOsmDebugUnitTest", "testGoogleDebugUnitTest", "lintGoogleDebug"):
+        # assembleGooglePreview runs R8 the way the Play Store release does.
+        for task in (
+            "testOsmDebugUnitTest",
+            "testGoogleDebugUnitTest",
+            "lintGoogleDebug",
+            "assembleGooglePreview",
+        ):
             self.assertIn(task, checks["run"])
+        # Every release keeps R8's mapping beside the bundle, for readable Play crash reports.
+        android = workflow("android.yaml")["jobs"]
+        collect = next(s for s in android["release"]["steps"] if s.get("id") == "collect")
+        self.assertIn("mapping/googleRelease/mapping.txt", collect["run"])
+        built = next(
+            s for s in android["build"]["steps"] if s.get("name") == "Compile Google Maps APK"
+        )
+        self.assertIn("assembleGooglePreview", built["run"])

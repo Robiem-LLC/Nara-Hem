@@ -8,10 +8,11 @@ Builds to try out; nothing reaches the public:
 
 - **Server:** tests on SQLite and PostgreSQL, and the `dev` image.
 - **iPhone:** simulator tests, Swift formatting, and an Ad Hoc copy on the Mac's share.
-- **Android:** unit tests and lint, and a debug APK on the Mac's share.
+- **Android:** unit tests and lint, and a test APK on the Mac's share: shrunk by R8 exactly like the
+  Play Store release, so try it on a phone before releasing.
 - **Formatting** for every language.
 
-A debug APK is signed with the build Mac's own key, so it can't be installed over a release (or the
+A test APK is signed with the build Mac's own key, so it can't be installed over a release (or the
 other way round) without uninstalling first.
 
 ## Pushes to `main`
@@ -30,6 +31,10 @@ In GitHub, open **Actions**, pick the workflow, click **Run workflow** and choos
   uploaded to TestFlight.
 - **Android:** "Android" with **release** ticked. The APK and Play Store bundle are signed with the
   release key and copied to the Mac's share, and a new version becomes a GitHub Release (below).
+  Release builds are shrunk and obfuscated by R8: with the bundle, upload its
+  `NaraHem-Android-<version>-mapping.txt` to Google Play (the version in **App bundle explorer** →
+  **Downloads** → **ReTrace mapping file**) so crash reports show real names. Every run also keeps
+  its files, bundle and mapping included, as a download on the run for 30 days.
 
 ## Versions
 

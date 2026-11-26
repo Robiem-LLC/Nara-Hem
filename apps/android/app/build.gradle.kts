@@ -79,9 +79,24 @@ android {
     }
     buildTypes {
         getByName("release") {
+            // R8 shrinks, optimizes and obfuscates release builds; keep rules are in
+            // proguard-rules.pro, and mapping.txt goes with each release for crash reports.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             if (releaseKeystore.isNotBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        // The release build, shrunk the same way but signed with the debug key: the dev test
+        // build, so what Google Play gets is tried on a phone before it's released.
+        create("preview") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
     testOptions {
@@ -117,6 +132,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.activity:activity-compose:1.11.0")
+    // Play services ask for fragment 1.1.0, which Google Play reports as outdated.
+    implementation("androidx.fragment:fragment:1.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")

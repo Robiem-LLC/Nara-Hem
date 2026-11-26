@@ -1,7 +1,8 @@
 name: Android
-# dev pushes: a debug APK on the Mac's share for testing. Pushes to main build nothing here. The
-# release-signed APK and Play Store bundle are a manual run: Run workflow on main with "release"
-# ticked; the version comes from VERSION, and a new version also becomes a GitHub Release.
+# dev pushes: a test APK on the Mac's share, shrunk by R8 like the Play Store release but signed
+# with the test key. Pushes to main build nothing here. The release-signed APK, Play Store bundle
+# and R8 mapping are a manual run: Run workflow on main with "release" ticked; the version comes
+# from VERSION, and a new version also becomes a GitHub Release.
 on:
   push:
     branches: [dev]
@@ -82,20 +83,22 @@ jobs:
         env:
           NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY: ${{ secrets.NARAHEM_GOOGLE_MAPS_ANDROID_API_KEY || 'synthetic-ci-key-not-for-device-use' }}
           NARAHEM_BUILD_COMMIT: ${{ github.sha }}
-        run: bash gradlew :app:assembleGoogleDebug --no-daemon
+        # The preview build: shrunk and obfuscated by R8 exactly like the Play Store release, but
+        # signed with the test key, so what Google Play will get is what gets tried on a phone.
+        run: bash gradlew :app:assembleGooglePreview --no-daemon
       - name: Print Google APK signing SHA-1
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         run: |
           # Read the signing identity from the actual APK, not a runner-specific keystore path.
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs \
-            apps/android/app/build/outputs/apk/google/debug/app-google-debug.apk \
+            apps/android/app/build/outputs/apk/google/preview/app-google-preview.apk \
             | grep -i 'Signer #1 certificate SHA-1 digest:'
-      - name: Create dated debug APK
+      - name: Create dated test APK
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         run: |
           # dev builds are labeled so they are never mistaken for a main build.
           channel=$([[ "$GITHUB_REF_NAME" == main ]] || echo "-$GITHUB_REF_NAME")
-          cp apps/android/app/build/outputs/apk/google/debug/app-google-debug.apk "apps/android/app/build/outputs/apk/google/debug/NaraHem-Android${channel}-$(date -u '+%Y%m%d-%H%M')-build$((GITHUB_RUN_NUMBER + 1000)).apk"
+          cp apps/android/app/build/outputs/apk/google/preview/app-google-preview.apk "apps/android/app/build/outputs/apk/google/preview/NaraHem-Android${channel}-$(date -u '+%Y%m%d-%H%M')-build$((GITHUB_RUN_NUMBER + 1000)).apk"
       - name: Keep only the newest build files (oldest deleted first)
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         continue-on-error: true
@@ -103,14 +106,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           KEEP: ${{ vars.NARAHEM_ARTIFACT_KEEP || '5' }}
         run: python3 ci/keep_artifacts.py --keep "$KEEP" 'NaraHem-Android-*'
-      - name: Upload installable Google Maps debug APK
+      - name: Upload installable Google Maps test APK
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         # GitHub's artifact storage can fill up; the share copy below doesn't need it.
         continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: NaraHem-Android-${{ github.run_number }}-${{ github.sha }}
-          path: apps/android/app/build/outputs/apk/google/debug/NaraHem-Android-*.apk
+          path: apps/android/app/build/outputs/apk/google/preview/NaraHem-Android-*.apk
           if-no-files-found: error
           retention-days: 7
       - name: Deliver APK to Mac share
@@ -120,7 +123,7 @@ jobs:
           set -euo pipefail
           source="$RUNNER_TEMP/android-publish-$GITHUB_RUN_ID"
           rm -rf "$source" && mkdir -p "$source"
-          cp apps/android/app/build/outputs/apk/google/debug/NaraHem-Android-*.apk "$source/"
+          cp apps/android/app/build/outputs/apk/google/preview/NaraHem-Android-*.apk "$source/"
           python3 ci/publish/publish.py --platform android --source "$source" \
             --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --commit "$GITHUB_SHA" \
             --channel "$GITHUB_REF_NAME"
@@ -244,10 +247,23 @@ jobs:
           rm -rf "$dist" && mkdir -p "$dist"
           cp apps/android/app/build/outputs/apk/google/release/app-google-release.apk "$dist/NaraHem-Android-$VERSION.apk"
           cp apps/android/app/build/outputs/bundle/googleRelease/app-google-release.aab "$dist/NaraHem-Android-$VERSION.aab"
+          # R8's map back to the real names, to upload to Google Play with the bundle so crash
+          # reports are readable.
+          cp apps/android/app/build/outputs/mapping/googleRelease/mapping.txt "$dist/NaraHem-Android-$VERSION-mapping.txt"
           # The same APK under a fixed name, so .../releases/latest/download/NaraHem-Android.apk
           # always gets the newest release (invitations and the website link to it).
           cp "$dist/NaraHem-Android-$VERSION.apk" "$dist/NaraHem-Android.apk"
           (cd "$dist" && shasum -a 256 NaraHem-Android-* > SHA256SUMS && cat SHA256SUMS)
+      - name: Keep the release files with this run
+        # A version already released isn't published again, so its rebuilt bundle and mapping
+        # would otherwise be nowhere to download.
+        if: always() && steps.collect.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: NaraHem-Android-release-${{ github.run_number }}
+          path: ${{ runner.temp }}/release-${{ github.run_id }}
+          retention-days: 30
       - name: Publish the GitHub Release (new versions only)
         if: env.NEW_RELEASE == 'true'
         env:
