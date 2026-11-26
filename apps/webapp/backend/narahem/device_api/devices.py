@@ -113,22 +113,25 @@ def install(app, *, credential, current, database, own_credential, rate, trip_pr
             registration["platform"] = body.platform
         verify_signature(body.signing_key, registration, body.signature)
         token = secrets.token_urlsafe(32)
-        db.add(
-            ClientDevice(
-                id=body.id,
-                account_id=auth[0].id,
-                name=body.name.strip(),
-                signing_key=body.signing_key,
-                box_key=body.box_key,
-                credential=digest(token),
-                registration=canonical(registration).decode(),
-                registration_signature=body.signature,
-                created=time.time(),
-            )
+        device = ClientDevice(
+            id=body.id,
+            account_id=auth[0].id,
+            name=body.name.strip(),
+            signing_key=body.signing_key,
+            box_key=body.box_key,
+            credential=digest(token),
+            registration=canonical(registration).decode(),
+            registration_signature=body.signature,
+            created=time.time(),
         )
+        db.add(device)
         audit(db, "device.registered", auth[0].id, body.id)
+        db.flush()
+        # On an open demo server, a tester's phone is approved straight away.
+        approve = getattr(request.app.state, "approve_tester_phone", None)
+        approved = bool(approve and approve(db, device))
         db.commit()
-        return {"id": body.id, "credential": token, "status": "pending"}
+        return {"id": body.id, "credential": token, "status": "approved" if approved else "pending"}
 
     @app.get("/api/devices")
     def devices(auth=Depends(current), db: Session = Depends(database)):

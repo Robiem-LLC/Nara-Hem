@@ -29,7 +29,7 @@ import httpx
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from narahem.app import HASHER
+from narahem.app import HASHER, trusted_accounts
 from narahem.demo_phone import DemoPhone, Server, meters
 from narahem.models import Account, AccountApproval, ClientDevice, ServiceState
 
@@ -143,11 +143,15 @@ class Family:
             return db.scalar(select(Account.id).where(Account.role == "admin"))
 
     def everyone(self):
-        """Returns every active account: the administrator, the reviewers and the family. A
-        reviewer added later, such as a second store's, is shared with like a new member is.
+        """Returns every active, confirmed account: the administrator, reviewers, testers on an
+        open demo server and the family. Anyone added later, such as a second store's reviewer, is
+        shared with like a new member is. An account still waiting for its code can't be shared
+        with yet; it's picked up within a minute of confirming.
         """
         with Session(self.server.engine) as db:
-            return set(db.scalars(select(Account.id).where(Account.status == "active")))
+            return set(
+                db.scalars(select(Account.id).where(Account.status == "active", trusted_accounts()))
+            )
 
     def share_with_everyone(self):
         """Has each phone share with every other active account, if that has changed."""

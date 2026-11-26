@@ -25,6 +25,7 @@ from narahem.data_service import audit, canonical, identity
 from narahem.models import (
     Account,
     ClientDevice,
+    DeviceSharingAudience,
     NativeRefreshSession,
     PhoneChallenge,
     PushDelivery,
@@ -409,6 +410,31 @@ def install(
             audit(db, "phone.revoke.email_unavailable", account.id)
             return False
         return True
+
+    def approve_tester_phone(db, device):
+        """On an open demo server, approves a tester's newly registered phone straight away,
+        replacing any phone they had before, and confirms their account. Their location is shared
+        with nobody. Returns True if it did.
+        """
+        account = db.get(Account, device.account_id)
+        if not review_mode.is_tester(account) or platform(device) not in ("ios", "android"):
+            return False
+        state = db.execute(
+            select(ServiceState).where(ServiceState.id == 1).with_for_update()
+        ).scalar_one()
+        old = mobile_slot(db, account.id, exclude=device.id)
+        if old:
+            change_roster(db, state, revoke=old.id, actor=account.id)
+            db.flush()
+        change_roster(db, state, add=device, actor=account.id)
+        account.verified = True
+        if not db.get(DeviceSharingAudience, device.id):
+            db.add(DeviceSharingAudience(device_id=device.id, account_ids="[]"))
+        audit(db, "demo.tester_phone_approved", account.id, device.id)
+        return True
+
+    # Device registration (device_api) runs this for every new phone.
+    app.state.approve_tester_phone = approve_tester_phone
 
     def revoke_phone(db, device, actor):
         """Permanently revokes a phone and removes it from the signed roster."""

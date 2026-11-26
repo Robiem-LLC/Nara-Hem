@@ -864,11 +864,19 @@ def create_app(
         db.commit()
         return {"sent": sent, "delivery": "pending" if waiting else "sent", "failed": failed}
 
+    # When idle testers were last pruned on an open demo server.
+    pruned = [0.0]
+
     def worker_batch():
         """Background job: cleans up phone enrollment, rechecks the texting key now and then,
         and sends queued email and texts.
         """
         mobile_enrollment.cleanup(engine)
+        prune = getattr(app.state, "prune_testers", None)
+        if prune and review_mode.open_signup() and time.time() - pruned[0] > 3600:
+            pruned[0] = time.time()
+            with Session(engine) as db:
+                prune(db)
         with Session(engine) as db:
             settings = db.get(Settings, 1)
             key, _ = texting_key(db)

@@ -10,6 +10,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from narahem import review_mode
 from narahem.app import account_trusted, contact, digest, email_address
 from narahem.models import (
     Account,
@@ -66,11 +67,18 @@ def install(
         """
         if not account_trusted(auth[0], db):
             raise HTTPException(403, "Wait for account approval before viewing household members")
-        others = db.scalars(
-            select(Account)
-            .where(Account.status == "active", Account.role != "admin", Account.id != auth[0].id)
-            .order_by(Account.username)
-        ).all()
+        # Testers on an open demo server never appear to anyone else.
+        others = [
+            a
+            for a in db.scalars(
+                select(Account)
+                .where(
+                    Account.status == "active", Account.role != "admin", Account.id != auth[0].id
+                )
+                .order_by(Account.username)
+            )
+            if not review_mode.is_tester(a)
+        ]
         members = [auth[0], *others]
         return {
             "members": [

@@ -1,11 +1,14 @@
 """Revoking, restoring and deleting accounts."""
 
+import time
+
 from fastapi import Depends, HTTPException
 from sqlalchemy import (
     select,
 )
 from sqlalchemy.orm import Session
 
+from narahem import review_mode
 from narahem.app import account_trusted, digest
 from narahem.data_service import (
     audit,
@@ -16,6 +19,7 @@ from narahem.models import (
     Account,
     AccountApproval,
     Challenge,
+    ClientDevice,
     DeviceBootstrapChallenge,
     EnrollmentClaim,
     LoginSession,
@@ -84,7 +88,16 @@ def install(app, *, admin, database):
             raise HTTPException(404, "Account not found")
         if account.role == "admin":
             raise HTTPException(409, "Owner deletion is not supported")
-        result = purge_account_data(db, account_id, auth[0].id)
+        result = remove_account(db, account, auth[0].id)
+        db.commit()
+        return {"deleted": True, **result}
+
+    def remove_account(db, account, actor):
+        """Deletes an account with its location, event and profile data, sessions and pending
+        messages. Saved places are kept. The caller holds the household lock and commits.
+        """
+        account_id = account.id
+        result = purge_account_data(db, account_id, actor)
         db.query(NativeRefreshSession).filter_by(account_id=account_id).delete()
         db.query(RetiredNativeRefresh).filter_by(account_id=account_id).delete()
         db.query(LoginSession).filter_by(account_id=account_id).delete()
@@ -100,5 +113,48 @@ def install(app, *, admin, database):
         db.query(Outbox).filter_by(account_id="p:" + account_id).delete(synchronize_session=False)
         db.query(AccountApproval).filter_by(account_id=account_id).delete(synchronize_session=False)
         db.delete(account)
+        return result
+
+    def prune_testers(db, now=None):
+        """On an open demo server, deletes testers' accounts unused for 30 days: no phone contact
+        and no app session in that time. Reviewers, the demo family and the admin are never
+        touched. Returns how many were deleted.
+        """
+        deleted = 0
+        if not review_mode.open_signup():
+            return 0
+        now = now or time.time()
+        cutoff = now - review_mode.TESTER_IDLE_SECONDS
+        db.execute(select(ServiceState).where(ServiceState.id == 1).with_for_update()).scalar_one()
+        for account in db.scalars(select(Account).where(Account.role != "admin")).all():
+            if not review_mode.is_tester(account):
+                continue
+            seen = [
+                d.seen or d.created
+                for d in db.scalars(
+                    select(ClientDevice).where(ClientDevice.account_id == account.id)
+                )
+            ]
+            # A phone's refresh token lasts 90 days from its last use; a browser session 12 hours.
+            seen += [
+                s.expires - 90 * 86400
+                for s in db.scalars(
+                    select(NativeRefreshSession).where(
+                        NativeRefreshSession.account_id == account.id
+                    )
+                )
+            ]
+            seen += [
+                s.expires - 43200
+                for s in db.scalars(
+                    select(LoginSession).where(LoginSession.account_id == account.id)
+                )
+            ]
+            if max(seen, default=0) < cutoff:
+                remove_account(db, account, "demo-cleanup")
+                deleted += 1
         db.commit()
-        return {"deleted": True, **result}
+        return deleted
+
+    # The background job (app.py) prunes idle testers on an open demo server.
+    app.state.prune_testers = prune_testers

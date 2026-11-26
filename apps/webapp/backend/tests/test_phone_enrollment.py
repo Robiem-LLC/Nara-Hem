@@ -9,6 +9,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from nacl.public import PrivateKey
 from nacl.signing import SigningKey
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from narahem import mobile_enrollment, review_mode, texting
@@ -215,6 +216,108 @@ class PhoneEnrollmentTests(unittest.TestCase):
         )
         self.assertEqual(reply.status_code, 200, reply.text)
         self.assertTrue(member.get("/api/session").json()["verified"])
+
+    def open_demo(self):
+        """Environment for an open demo server: review mode plus open sign-up."""
+        return patch.dict(
+            os.environ,
+            {
+                review_mode.CODE: "246810",
+                review_mode.ACCOUNTS: "@demo.example.invalid,reviewer@example.invalid",
+                review_mode.OPEN_SIGNUP: "true",
+            },
+        )
+
+    def sign_up(self, address, name):
+        """Registers a tester on an open demo server and returns their signed-in client and ID."""
+        app = TestClient(self.app, base_url=test_setup.PUBLIC)
+        app.headers["Origin"] = test_setup.PUBLIC
+        reply = app.post(
+            "/api/enrollment/register",
+            json={"email": address, "username": name, "password": test_setup.PASSWORD},
+        )
+        self.assertEqual(reply.status_code, 201, reply.text)
+        client = self.signed_in(address)
+        return client, client.get("/api/session").json()["id"]
+
+    def test_closed_servers_still_need_an_invitation(self):
+        self.enable_phone_enrollment()
+        app = TestClient(self.app, base_url=test_setup.PUBLIC)
+        app.headers["Origin"] = test_setup.PUBLIC
+        form = {"username": "Test Er", "password": test_setup.PASSWORD}
+        refused = app.post("/api/enrollment/register", json={**form, "email": "x@example.invalid"})
+        self.assertEqual(refused.status_code, 404)
+        # Open sign-up alone, without review mode, does nothing (and the server won't start).
+        with patch.dict(os.environ, {review_mode.OPEN_SIGNUP: "true"}):
+            self.assertFalse(review_mode.open_signup())
+            with self.assertRaises(ValueError):
+                review_mode.check()
+            still = app.post(
+                "/api/enrollment/register", json={**form, "email": "y@example.invalid"}
+            )
+            self.assertEqual(still.status_code, 404)
+
+    def test_an_open_demo_lets_testers_in_privately(self):
+        self.enable_phone_enrollment()
+        with self.open_demo():
+            self.assertIn("OPEN SIGN-UP IS ON", review_mode.check())
+            client, tester = self.sign_up("tester@example.invalid", "Test Er")
+            # The phone is approved at once: no invitation, no code.
+            device, _ = self.register_phone(client, tester)
+            with Session(self.app.state.engine) as db:
+                self.assertEqual(db.get(ClientDevice, device).status, "approved")
+                self.assertTrue(db.get(Account, tester).verified)
+            # Their location is shared with nobody, and they can't change that.
+            phone = {"credential": _}
+            audience = self.call(phone, "GET", "/api/sharing/audience").json()
+            self.assertEqual((audience["account_ids"], audience["eligible_members"]), ([], []))
+            refused = self.call(phone, "PUT", "/api/sharing/audience", {"account_ids": []})
+            self.assertEqual(refused.status_code, 403)
+            # Nobody else sees them in the household.
+            member, _member_client = self.member()
+            others = _member_client.get("/api/household/members").json()["members"]
+            self.assertNotIn(tester, {m["id"] for m in others})
+            own = client.get("/api/household/members").json()["members"]
+            self.assertEqual(own[0]["id"], tester)
+            # Reinstalling: a second phone replaces the first, still without a code.
+            second, _ = self.register_phone(client, tester)
+            with Session(self.app.state.engine) as db:
+                self.assertEqual(db.get(ClientDevice, second).status, "approved")
+                self.assertEqual(db.get(ClientDevice, device).status, "revoked")
+            # An address on the review list can't be taken by signing up.
+            app = TestClient(self.app, base_url=test_setup.PUBLIC)
+            app.headers["Origin"] = test_setup.PUBLIC
+            for address in ("reviewer@example.invalid", "maya@demo.example.invalid"):
+                taken = app.post(
+                    "/api/enrollment/register",
+                    json={
+                        "email": address,
+                        "username": "Not Them",
+                        "password": test_setup.PASSWORD,
+                    },
+                )
+                self.assertEqual(taken.status_code, 404, address)
+
+    def test_idle_testers_are_deleted_after_30_days(self):
+        self.enable_phone_enrollment()
+        with self.open_demo():
+            _, idle = self.sign_up("idle@example.invalid", "Idle One")
+            busy_client, busy = self.sign_up("busy@example.invalid", "Busy One")
+            self.register_phone(busy_client, busy)
+            month = review_mode.TESTER_IDLE_SECONDS + 3600
+            later = time.time() + month
+            with Session(self.app.state.engine) as db:
+                # The busy tester's phone was heard from just now (in a month's time).
+                for device in db.query(ClientDevice).filter_by(account_id=busy):
+                    device.seen = later
+                db.commit()
+                self.assertEqual(self.app.state.prune_testers(db, now=later), 1)
+                self.assertIsNone(db.get(Account, idle))
+                self.assertIsNotNone(db.get(Account, busy))
+                # The admin and the review list are never touched.
+                self.assertIsNotNone(db.scalar(select(Account).where(Account.role == "admin")))
+        with Session(self.app.state.engine) as db:
+            self.assertEqual(self.app.state.prune_testers(db, now=later * 2), 0, "only when open")
 
     def test_signer_needs_a_trusted_admin_browser_and_a_stable_key(self):
         reply = self.client.post("/api/enrollment/signer", json={})

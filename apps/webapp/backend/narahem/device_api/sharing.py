@@ -9,6 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from narahem import review_mode
 from narahem.app import trusted_accounts
 from narahem.data_service import audit, canonical
 from narahem.models import (
@@ -56,8 +57,18 @@ def install(app, *, active_devices, approved, database):
         """
         row = db.get(DeviceSharingAudience, device.id)
         targets = json.loads(row.account_ids) if row else None
-        eligible = list(
-            db.scalars(
+        if review_mode.is_tester(db.get(Account, device.account_id)):
+            # On an open demo server, a tester's phone shares with nobody.
+            return {
+                "account_ids": [],
+                "default_all": False,
+                "owner_viewer": None,
+                "eligible_members": [],
+            }
+        # Testers on an open demo server are never offered to other phones.
+        eligible = [
+            a
+            for a in db.scalars(
                 select(Account)
                 .where(
                     Account.status == "active",
@@ -67,7 +78,8 @@ def install(app, *, active_devices, approved, database):
                 )
                 .order_by(Account.id)
             )
-        )
+            if not review_mode.is_tester(a)
+        ]
         permitted = [a.id for a in eligible]
         # The admin browser always sees a phone that shares its location.
         owner = db.scalar(
@@ -99,6 +111,8 @@ def install(app, *, active_devices, approved, database):
         db.refresh(device)
         if device.status != "approved":
             raise HTTPException(403, "Device revoked")
+        if review_mode.is_tester(db.get(Account, device.account_id)):
+            raise HTTPException(403, "On this demo server, your location isn't shared with anyone")
         row = db.get(DeviceSharingAudience, device.id)
         previous_targets = json.loads(row.account_ids) if row else "all eligible members"
         targets = body.account_ids

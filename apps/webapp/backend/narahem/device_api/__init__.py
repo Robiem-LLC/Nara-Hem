@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from narahem import alexa_api, household_alerts
+from narahem import alexa_api, household_alerts, review_mode
 from narahem.app import account_trusted, digest, trusted_accounts
 from narahem.data_service import (
     DAY,
@@ -157,17 +157,23 @@ def install(
     def audience_accounts(db, device_id):
         """Returns the accounts a device shares its location with: its chosen audience, or every
         member if it hasn't chosen, and always the admin, whose browser sees every phone that
-        shares its location.
+        shares its location. On an open demo server, a tester's phone shares with nobody, and
+        other phones only share with testers by choice (the demo family does).
         """
+        sender = db.get(ClientDevice, device_id)
+        if sender and review_mode.is_tester(db.get(Account, sender.account_id)):
+            return set()
         audience = db.get(DeviceSharingAudience, device_id)
-        members = {
-            a.id
-            for a in db.scalars(
+        everyone = list(
+            db.scalars(
                 select(Account).where(
                     Account.status == "active", Account.role != "admin", trusted_accounts()
                 )
             )
-        }
+        )
+        members = {a.id for a in everyone}
+        if not audience:
+            members = {a.id for a in everyone if not review_mode.is_tester(a)}
         admins = {
             a.id
             for a in db.scalars(

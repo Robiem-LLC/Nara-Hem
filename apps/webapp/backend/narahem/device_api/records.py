@@ -14,6 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from narahem import review_mode
 from narahem.data_service import DAY, audit, canonical, decode, verify_signature
 from narahem.models import (
     Account,
@@ -272,6 +273,13 @@ def install(
         if value["revision"] != state.revision:
             raise HTTPException(409, "Refresh trusted membership and re-encrypt before publishing")
         recipients = check_audience(db, device, value)
+        if review_mode.is_tester(db.get(Account, device.account_id)):
+            # On an open demo server, a tester's records reach only their own phone, and they
+            # can't add places that would show up for everyone else.
+            if value["kind"] == "place":
+                raise HTTPException(403, "Places can't be added on this demo server")
+            own = {d.id for d in active_devices(db) if d.account_id == device.account_id}
+            recipients = [r for r in recipients if r in own]
         clear_data = open_server_copy(value)
         size = len(envelope.encode())
         latest_state = db.get(LatestState, (value["kind"], value["entity_id"]))
@@ -538,9 +546,16 @@ def install(
                 .group_by(ClientDevice.account_id)
             ).all()
         )
+        testers = {}
         for row in rows:
             if row.kind == "location" and not location_visible(db, row, device):
                 continue
+            # On an open demo server, nobody else sees a tester's profile or location.
+            if row.account_id != device.account_id:
+                if row.account_id not in testers:
+                    testers[row.account_id] = review_mode.is_tester(db.get(Account, row.account_id))
+                if testers[row.account_id]:
+                    continue
             try:
                 payload = trip_processor.open_record(json.loads(row.envelope)["body"])
             except (HTTPException, KeyError):

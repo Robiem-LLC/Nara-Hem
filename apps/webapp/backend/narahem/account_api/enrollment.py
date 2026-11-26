@@ -1,5 +1,6 @@
 """Invitation enrollment: claims, requests and email verification."""
 
+import secrets
 import time
 
 from fastapi import Depends, HTTPException, Request
@@ -9,7 +10,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from narahem.app import HASHER, account_trusted, digest, find_account, username
+from narahem import review_mode
+from narahem.app import HASHER, account_trusted, contact, digest, find_account, username
 from narahem.data_service import audit
 from narahem.models import (
     Account,
@@ -137,6 +139,20 @@ def install(app, *, admin, database, queue, rate):
         """
         rate(request, "register-account", 5)
         account = find_account(db, body.email)
+        if not account and review_mode.open_signup():
+            # An open demo server lets anyone in without an invitation, except under an address
+            # on the review list, which only the administrator can invite.
+            kind, value = contact(body.email)
+            account = Account(
+                id=secrets.token_hex(16),
+                email=value if kind == "email" else None,
+                phone=value if kind == "phone" else None,
+            )
+            if review_mode.listed(account):
+                account = None
+            else:
+                db.add(account)
+                db.flush()
         if not account or not replaceable(db, account):
             raise HTTPException(
                 404,
