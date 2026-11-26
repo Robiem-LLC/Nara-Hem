@@ -85,7 +85,8 @@ jobs:
           NARAHEM_BUILD_COMMIT: ${{ github.sha }}
         # The preview build: shrunk and obfuscated by R8 exactly like the Play Store release, but
         # signed with the test key, so what Google Play will get is what gets tried on a phone.
-        run: bash gradlew :app:assembleGooglePreview --no-daemon
+        # Its lint runs on Linux (Android tests); on this Mac it crashes loading fonts.
+        run: bash gradlew :app:assembleGooglePreview -x lintVitalGooglePreview --no-daemon
       - name: Print Google APK signing SHA-1
         if: env.GOOGLE_KEY_CONFIGURED == 'true'
         run: |
