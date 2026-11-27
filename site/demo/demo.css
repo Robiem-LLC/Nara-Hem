@@ -185,3 +185,14 @@ main {
   text-transform: uppercase;
   color: var(--accent-text);
 }
+
+/* The stores' official badges, the same height side by side, as both stores ask. */
+.store-badge {
+  display: inline-block;
+  line-height: 0;
+}
+.store-badge img {
+  display: block;
+  height: 40px;
+  width: auto;
+}

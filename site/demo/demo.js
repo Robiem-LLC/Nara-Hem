@@ -225,6 +225,18 @@
         `${external ? ' data-external' : ''}>${escape(label)}</button>`
       : '';
 
+  /** The store's official badge, linking to the app's page there. */
+  const storeBadge = (platform) => {
+    const [href, image, words] =
+      platform === 'ios'
+        ? [SITE.testflight, 'app-store.svg', 'Download on the App Store']
+        : [SITE.android, 'google-play.png', 'Get it on Google Play'];
+    return (
+      `<a class="store-badge" href="${escape(href)}" target="_blank" rel="noopener">` +
+      `<img src="badges/${image}" alt="${words}" height="40" /></a>`
+    );
+  };
+
   /** The real app, filmed on a phone, playing inside a phone frame. */
   const phoneVideo = (name, label) =>
     SITE.media?.[name]
@@ -249,9 +261,14 @@
             <li>Battery-friendly: precise only while moving.</li>
             <li>Choose who in the household can see you.</li>
           </ul>
-          <div class="links">${linkButton('Join the beta on TestFlight', SITE.testflight)}</div>
+          ${
+            SITE.store?.testflight
+              ? `<div class="links">${storeBadge('ios')}</div>
+          <p class="subtle">Needs iOS 17 or later.</p>`
+              : `<div class="links">${linkButton('Join the beta on TestFlight', SITE.testflight)}</div>
           <p class="subtle">Needs iOS 17 or later. Install Apple's TestFlight app first, then
-          open the invitation link on the iPhone.</p>
+          open the invitation link on the iPhone.</p>`
+          }
         </div>
       </section>`,
     android: () => `
@@ -267,9 +284,19 @@
             <li>Works with or without Google services.</li>
             <li>Choose who in the household can see you.</li>
           </ul>
-          <div class="links">${linkButton('Download the Android app', SITE.android)}</div>
+          ${
+            SITE.store?.android
+              ? `<div class="links">${storeBadge('android')}${linkButton(
+                  'Download the APK',
+                  SITE.github && `${SITE.github}/releases/latest`,
+                  true,
+                )}</div>
+          <p class="subtle">Needs Android 8.0 or later. For a phone without Google Play, open the
+          APK on the phone and allow your browser to install apps when Android asks.</p>`
+              : `<div class="links">${linkButton('Download the Android app', SITE.android)}</div>
           <p class="subtle">Needs Android 8.0 or later. Open the download on the phone and allow
-          your browser to install apps when Android asks.</p>
+          your browser to install apps when Android asks.</p>`
+          }
         </div>
       </section>`,
     alexa: () => `

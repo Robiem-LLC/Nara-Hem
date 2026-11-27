@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from PIL import Image
 
@@ -25,6 +26,14 @@ HERE = Path(__file__).resolve().parent
 ICON = HERE.parent / "apps/ios/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 STACK = HERE.parent / "deploy/portainer-stack.yaml"
 WEB = HERE.parent / "apps/webapp"
+BADGES = HERE.parent / "docs/marketing/badges"
+
+# The official store badges (docs/marketing/badges), shown in place of a plain button once an
+# app link points at its store: the store's address, the badge and its words.
+STORES = {
+    "testflight": ("apps.apple.com", "app-store.svg", "Download on the App Store"),
+    "android": ("play.google.com", "google-play.png", "Get it on Google Play"),
+}
 
 DEMO_FILES = {
     "app.css": WEB / "frontend/public/style.css",
@@ -121,6 +130,38 @@ def button(link, label):
     return f'<span class="button disabled">{label}: opening soon</span>'
 
 
+def in_store(link, platform):
+    """Returns True if the app link is the app's App Store or Google Play page."""
+    return urlsplit(link).hostname == STORES[platform][0]
+
+
+def store_badge(link, platform):
+    """Returns the store's official badge linking to the app's page, unchanged as each store's
+    rules ask, or an empty string if the link isn't a store page.
+    """
+    if not in_store(link, platform):
+        return ""
+    _, image, words = STORES[platform]
+    return (
+        f'<a class="store-badge" href="{html.escape(link)}">'
+        f'<img src="badges/{image}" alt="{words}" height="40" /></a>'
+    )
+
+
+def install_apps(config):
+    """Returns the setup page's app links: each store's badge once the app is in it, otherwise
+    a plain link to TestFlight or the Android download.
+    """
+    plain = {"testflight": "iPhone (TestFlight)", "android": "Android"}
+    links = [
+        store_badge(config[platform], platform)
+        or f'<a href="{html.escape(config[platform])}">{label}</a>'
+        for platform, label in plain.items()
+        if config[platform]
+    ]
+    return f'<span class="store-badges">{"".join(links)}</span>' if links else ""
+
+
 def phones_section(media, product):
     """Returns the phone video section if the videos exist, otherwise an empty string."""
     phones = [
@@ -180,6 +221,7 @@ def main(media, output):
     values["image"] = html.escape(os.environ.get("SITE_IMAGE", "ghcr.io/<owner>/narahem"))
     values["testflight_button"] = button(config["testflight"], "Join on TestFlight")
     values["android_button"] = button(config["android"], "Download for Android")
+    values["install_apps"] = install_apps(config)
     values["updated"] = datetime.date.today().strftime("%B %-d, %Y")
     values["stack_yaml"] = html.escape(STACK.read_text())
     values["phones_section"] = phones_section(media, config["name"])
@@ -198,6 +240,7 @@ def main(media, output):
         (output / page).write_text(text)
     shutil.copy(HERE / "style.css", output)
     shutil.copy(HERE / "preview.png", output)
+    shutil.copytree(BADGES, output / "badges")
     shutil.copy(STACK, output / "narahem-stack.yaml")
     icon = Image.open(ICON).convert("RGB")
     for size in (64, 256):
@@ -219,6 +262,7 @@ def main(media, output):
         **{k: config.get(k, "") for k in ("name", "github", "testflight", "android", "contact")},
         "alexa_name": config.get("alexa_name") or config["name"],
         "install": "setup.html",
+        "store": {name: in_store(config[name], name) for name in STORES},
         **(
             {"google_maps_key": key, "google_styles": google_styles()}
             if (key := os.environ.get(GOOGLE_KEY, "").strip())

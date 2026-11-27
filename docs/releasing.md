@@ -36,6 +36,22 @@ In GitHub, open **Actions**, pick the workflow, click **Run workflow** and choos
   **Downloads** → **ReTrace mapping file**) so crash reports show real names. Every run also keeps
   its files, bundle and mapping included, as a download on the run for 30 days.
 
+## Once the apps are in the stores
+
+The app links come from two repository variables (**Settings** → **Secrets and variables** →
+**Actions** → **Variables**): `NARAHEM_IOS_APP_URL` (TestFlight until then) and
+`NARAHEM_ANDROID_APP_URL` (the latest GitHub Release APK until then). Once a store listing is
+public, set its variable to the store page:
+
+- **App Store:** `https://apps.apple.com/app/id<Apple ID>`, the Apple ID being the number in App
+  Store Connect → the app → **App Information**.
+- **Google Play:** `https://play.google.com/store/apps/details?id=com.robiem.narahem`.
+
+The next push to `main` then shows the store's official badge
+([`docs/marketing/badges`](marketing/badges)) on the website in place of the plain button, which
+opens the store app on a phone. The Android page keeps a link to the APK for phones without
+Google Play. The server image built by the same push puts the store links in invitation emails.
+
 ## Versions
 
 The [`VERSION`](../VERSION) file holds the version both apps show, such as `1.0.1`. To release a new

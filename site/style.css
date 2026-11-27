@@ -546,3 +546,22 @@ footer {
   color: var(--muted);
   font-weight: 600;
 }
+
+/* The stores' official badges, the same height side by side, as both stores ask. */
+.store-badge {
+  display: inline-block;
+  line-height: 0;
+}
+.store-badge img {
+  display: block;
+  height: 40px;
+  width: auto;
+}
+.store-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  vertical-align: middle;
+  margin: 6px 0;
+}

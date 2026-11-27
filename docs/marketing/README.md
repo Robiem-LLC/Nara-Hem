@@ -20,6 +20,17 @@ Neither store accepts the other's images: the sizes differ, and each store rejec
 names the other's platform (App Store guideline 2.3.10), which is why nothing is shared between
 the two folders.
 
+## `badges/`
+
+Apple's "Download on the App Store" (`app-store.svg`) and Google's "Get it on Google Play"
+(`google-play.png`) badges, as each company publishes them. The website shows them once the app
+links point at the stores ([releasing](../releasing.md#once-the-apps-are-in-the-stores)). Both
+stores' rules: don't change a badge's colours, words or shape, show them the same height side by
+side, leave space around each, and link each to the app's page in its store. They're the official
+files, not made by `store.py`: get new ones from
+[Apple](https://toolbox.marketingtools.apple.com/en-us/app-store/us) and
+[Google](https://play.google.com/intl/en_us/badges/).
+
 ## Updating them
 
 - **Header and feature graphic:** `python tools/showcase/store.py art docs/marketing`
