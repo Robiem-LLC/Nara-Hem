@@ -35,6 +35,11 @@ def install(app, *, current, maps_key):
         """Serves the main web app script."""
         return FileResponse(assets / "app.js", media_type="text/javascript")
 
+    @app.get("/theme.js")
+    def theme_script():
+        """Serves the script that applies the light theme before the page draws."""
+        return FileResponse(assets / "theme.js", media_type="text/javascript")
+
     @app.get("/style.css")
     def stylesheet():
         """Serves the web app stylesheet."""
@@ -59,6 +64,11 @@ def install(app, *, current, maps_key):
     def wordmark():
         """Serves the header wordmark."""
         return FileResponse(assets / "nara-hem-wordmark.png", media_type="image/png")
+
+    @app.get("/nara-hem-wordmark-dark.png")
+    def wordmark_dark():
+        """Serves the header wordmark with dark letters, for the light theme."""
+        return FileResponse(assets / "nara-hem-wordmark-dark.png", media_type="image/png")
 
     @app.get("/images/{name}")
     def map_asset(name: str):

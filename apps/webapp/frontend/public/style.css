@@ -42,6 +42,50 @@
   --info-line: #426a8c;
   --info-text: #bfe8ff;
 }
+:root[data-theme='light'] {
+  /* The light theme, chosen in Appearance. Same names as above. */
+  color-scheme: light;
+  --accent: #ffc35a;
+  --accent-text: #b78420;
+  --on-accent: #2a1a05;
+  --text: #3f3c36;
+  --text-label: #2b50b1;
+  --text-subdued: #7b7a79;
+  --background: #ebebeb;
+  --glow-top: #ffffff;
+  --glow-middle: #ffffff;
+  --glow-bottom: #f5f5f5;
+  --panel: #ffffff;
+  --panel-raised: #fafcff;
+  --panel-sunken: #f5f8ff;
+  --chip: #ffdfa1;
+  --chip-hover: #becae5;
+  --line: #e9e9e9;
+  --line-strong: #becae5;
+  --overlay: rgb(255 255 255 / 60%);
+  --backdrop: rgba(2, 8, 24, 0.75);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --white: #fff;
+  --map-ink: #17212b;
+  --label-background: rgba(8, 22, 57, 0.85);
+  --place: #ffc35a;
+  --route: #ffc35a;
+  --route-casing: #081639;
+  --trip-start: #22c55e;
+  --trip-end: #ef4444;
+  --ok-background: #1b3e31;
+  --ok-line: #4e8d6b;
+  --warn-background: #3d2c0e;
+  --warn-line: #8b793e;
+  --warn-text: #ffdfa1;
+  --danger: #db5359;
+  --danger-background: #efadba;
+  --danger-line: #99545c;
+  --danger-text: #672a2b;
+  --info-background: #233c52;
+  --info-line: #426a8c;
+  --info-text: #bfe8ff;
+}
 :root {
   color-scheme: dark;
   font-family:
@@ -89,6 +133,10 @@ header h1 {
   display: block;
   width: auto;
   height: 56px;
+}
+:root[data-theme='light'] .wordmark {
+  /* The same wordmark with dark letters, so it reads on the light background. */
+  content: url('nara-hem-wordmark-dark.png');
 }
 header button {
   margin-left: auto;
@@ -202,6 +250,14 @@ button:disabled {
   border-radius: 10px;
   margin: 20px 0;
   white-space: pre-wrap;
+}
+:root[data-theme='light'] #message,
+:root[data-theme='light'] .action-toast {
+  /* The light theme keeps these dark backgrounds, so their text stays light. */
+  color: var(--warn-text);
+}
+:root[data-theme='light'] .ok {
+  color: var(--white);
 }
 #message > span,
 .action-toast > span {

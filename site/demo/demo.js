@@ -409,6 +409,8 @@
       `<section class="site-about"><h2>${escape(title)}</h2><p>${escape(text)}</p></section>` +
       siteFooter();
     siteHeader();
+    const themeChoice = app.querySelector('#theme-choice');
+    if (themeChoice) themeChoice.value = lightTheme() ? 'light' : 'dark';
     for (const button of app.querySelectorAll('#app-nav button')) {
       const active = NAV[button.id] === screen;
       button.classList.toggle('secondary', !active);
@@ -585,6 +587,23 @@
     };
   }
 
+  /** True when the visitor chose the light theme in Appearance (theme.js applies it early). */
+  const lightTheme = () => document.documentElement.dataset.theme === 'light';
+
+  /** The web app's dark Google map style, or Google's own light map in the light theme. */
+  const mapStyles = () => (lightTheme() ? [] : SITE.google_styles || []);
+
+  /** Switches the whole site to the light or dark theme and remembers it in this browser. */
+  function setTheme(theme) {
+    if (theme === 'light') document.documentElement.dataset.theme = 'light';
+    else delete document.documentElement.dataset.theme;
+    try {
+      localStorage.setItem('narahem.theme', theme);
+    } catch {
+      // Storage can be blocked: the theme still changes for this visit.
+    }
+  }
+
   /** The Google Maps version of the demo map, styled like the real web app. */
   function googleMap(maps, holder) {
     holder.replaceChildren();
@@ -595,8 +614,8 @@
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
-      styles: SITE.google_styles || [],
-      backgroundColor: '#1f2a36',
+      styles: mapStyles(),
+      backgroundColor: lightTheme() ? '#f5f5f5' : '#1f2a36',
     });
     const info = new maps.InfoWindow();
     const overlays = [];
@@ -747,7 +766,7 @@
       scale: '2',
       key: GOOGLE_KEY,
     });
-    for (const rule of SITE.google_styles || []) {
+    for (const rule of mapStyles()) {
       const style = [
         rule.featureType && 'feature:' + rule.featureType,
         rule.elementType && 'element:' + rule.elementType,
@@ -1036,6 +1055,11 @@
     dialog.addEventListener('close', done);
     tell('trip', { member: trip.member, title });
   }
+
+  // Appearance in Admin settings works for real in the demo: it switches the site's theme.
+  app.addEventListener('change', (event) => {
+    if (event.target.id === 'theme-choice') setTheme(event.target.value);
+  });
 
   app.addEventListener('click', (event) => {
     const button = event.target.closest('button');

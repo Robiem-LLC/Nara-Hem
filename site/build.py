@@ -40,6 +40,7 @@ DEMO_FILES = {
     "app.css": WEB / "frontend/public/style.css",
     "app-icon.png": WEB / "frontend/public/app-icon.png",
     "nara-hem-wordmark.png": WEB / "frontend/public/nara-hem-wordmark.png",
+    "nara-hem-wordmark-dark.png": WEB / "frontend/public/nara-hem-wordmark-dark.png",
     "leaflet.css": WEB / "frontend/node_modules/leaflet/dist/leaflet.css",
     "leaflet.js": WEB / "frontend/node_modules/leaflet/dist/leaflet.js",
     "demo.js": HERE / "demo/demo.js",
@@ -243,6 +244,7 @@ def main(media, output):
         text = re.sub(r"\{\{(\w+)\}\}", lambda m: values[m.group(1)], text)
         (output / page).write_text(text)
     shutil.copy(HERE / "style.css", output)
+    shutil.copy(WEB / "frontend/public/theme.js", output)
     shutil.copy(HERE / "preview.png", output)
     shutil.copytree(BADGES, output / "badges")
     shutil.copy(STACK, output / "narahem-stack.yaml")

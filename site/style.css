@@ -7,11 +7,42 @@
   --muted: #a8b5c8;
   --accent: #a5f0bc;
   --accent-ink: #10241a;
+  --link: #a5f0bc;
+  --soft: #cdd7e5;
+  --line-strong: #384861;
+  --line-soft: #344356;
+  --chip: #263349;
+  --raised: #1b2636;
+  --dots: #3a4a62;
+  --code: #b6f5cb;
+  --code-bg: #0b1320;
+  --bar: #0b1019e6;
   font-family:
     system-ui,
     -apple-system,
     'Segoe UI',
     sans-serif;
+}
+:root[data-theme='light'] {
+  /* The light theme, chosen in the demo's Appearance setting. */
+  color-scheme: light;
+  --bg: #ebebeb;
+  --panel: #ffffff;
+  --line: #e9e9e9;
+  --text: #3f3c36;
+  --muted: #7b7a79;
+  --accent: #ffc35a;
+  --accent-ink: #2a1a05;
+  --link: #b78420;
+  --soft: #3f3c36;
+  --line-strong: #becae5;
+  --line-soft: #becae5;
+  --chip: #f5f8ff;
+  --raised: #f5f8ff;
+  --dots: #becae5;
+  --code: #2b50b1;
+  --code-bg: #f5f8ff;
+  --bar: rgb(255 255 255 / 90%);
 }
 * {
   box-sizing: border-box;
@@ -26,7 +57,7 @@ body {
   line-height: 1.6;
 }
 a {
-  color: var(--accent);
+  color: var(--link);
 }
 img,
 video {
@@ -43,7 +74,7 @@ video {
   justify-content: space-between;
   gap: 16px;
   padding: 12px max(16px, calc((100% - 1160px) / 2));
-  background: #0b1019e6;
+  background: var(--bar);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
@@ -98,7 +129,7 @@ h3 {
 }
 .eyebrow {
   margin: 0;
-  color: var(--accent);
+  color: var(--link);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -106,7 +137,7 @@ h3 {
 }
 .lead {
   font-size: 19px;
-  color: #cdd7e5;
+  color: var(--soft);
   margin: 0 0 28px;
 }
 .narrow {
@@ -137,15 +168,15 @@ h3 {
 .button.ghost {
   background: transparent;
   color: var(--text);
-  border-color: #384861;
+  border-color: var(--line-strong);
 }
 .button.small {
   padding: 7px 14px;
   font-size: 14px;
 }
 .button.disabled {
-  background: #263349;
-  border-color: #263349;
+  background: var(--chip);
+  border-color: var(--chip);
   color: var(--muted);
   pointer-events: none;
 }
@@ -167,7 +198,7 @@ h3 {
   margin: 0;
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid #344356;
+  border: 1px solid var(--line-soft);
   background: var(--panel);
   box-shadow: 0 30px 60px #0008;
 }
@@ -175,14 +206,14 @@ h3 {
   display: flex;
   gap: 7px;
   padding: 10px 12px;
-  background: #1b2636;
+  background: var(--raised);
   border-bottom: 1px solid var(--line);
 }
 .window-bar i {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #3a4a62;
+  background: var(--dots);
 }
 .window video {
   width: 100%;
@@ -206,7 +237,7 @@ h3 {
   order: 2;
 }
 .feature p {
-  color: #cdd7e5;
+  color: var(--soft);
 }
 .feature ul {
   padding-left: 20px;
@@ -232,7 +263,7 @@ h3 {
 .tile code {
   display: block;
   overflow-wrap: anywhere;
-  color: #b6f5cb;
+  color: var(--code);
   font-size: 14px;
 }
 
@@ -270,7 +301,7 @@ footer {
 }
 .policy p,
 .policy li {
-  color: #cdd7e5;
+  color: var(--soft);
 }
 
 @media (max-width: 860px) {
@@ -323,7 +354,7 @@ footer {
   margin: 8px 0;
 }
 .setup code {
-  color: #b6f5cb;
+  color: var(--code);
   overflow-wrap: anywhere;
 }
 .toc {
@@ -362,8 +393,8 @@ footer {
   font-weight: 600;
 }
 .setup pre {
-  background: #0b1320;
-  border: 1px solid #384861;
+  background: var(--code-bg);
+  border: 1px solid var(--line-strong);
   border-radius: 10px;
   padding: 14px;
   overflow-x: auto;
@@ -468,7 +499,7 @@ footer {
   width: 100%;
   height: 680px;
   border: 0;
-  background: #0b1019;
+  background: var(--bg);
 }
 .demo-panel {
   position: sticky;
@@ -483,7 +514,7 @@ footer {
   margin: 6px 0 10px;
 }
 .demo-panel p {
-  color: #cdd7e5;
+  color: var(--soft);
   margin: 0 0 12px;
 }
 .demo-panel .demo-private {
@@ -493,7 +524,7 @@ footer {
   padding-left: 10px;
 }
 .demo-panel .demo-try {
-  color: var(--accent);
+  color: var(--link);
   font-weight: 600;
   font-size: 15px;
 }
@@ -504,9 +535,9 @@ footer {
   margin-top: 16px;
 }
 .demo-jump button {
-  background: #263349;
+  background: var(--chip);
   color: var(--text);
-  border: 1px solid #384861;
+  border: 1px solid var(--line-strong);
   border-radius: 99px;
   padding: 6px 12px;
   font: inherit;
@@ -516,7 +547,7 @@ footer {
 .demo-jump button[aria-pressed='true'] {
   background: var(--accent);
   color: var(--accent-ink);
-  border-color: var(--accent);
+  border-color: var(--link);
 }
 @media (max-width: 960px) {
   .demo-layout {

@@ -1062,7 +1062,8 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(self.client.get("/api/devices").json()["pairing_available"])
 
     def test_setup_ui_and_security_headers(self):
-        for path in ("/", "/app.js", "/style.css", "/app-icon.png", "/nara-hem-wordmark.png"):
+        pages = ("/", "/app.js", "/theme.js", "/style.css", "/app-icon.png")
+        for path in (*pages, "/nara-hem-wordmark.png", "/nara-hem-wordmark-dark.png"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.headers["referrer-policy"], "no-referrer")

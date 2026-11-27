@@ -218,3 +218,15 @@ main {
 .site-alexa-badge {
   margin-top: 16px;
 }
+
+/* The light theme (Appearance in Admin settings): the demo-only pieces drawn in dark colours. */
+:root[data-theme='light'] .site-chat .you {
+  background: var(--chip-hover);
+}
+:root[data-theme='light'] .site-chat .alexa {
+  color: var(--white);
+}
+:root[data-theme='light'] .site-about {
+  border-color: var(--line-strong);
+  background: var(--panel);
+}

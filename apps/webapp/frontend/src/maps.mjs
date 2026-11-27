@@ -1,6 +1,6 @@
 import L from 'leaflet';
-import { GOOGLE_DARK_STYLES, OSM_TILE_URL, OSM_TILE_ATTRIBUTION } from './mapstyle.mjs';
-import { themeColor } from './theme.mjs';
+import { OSM_TILE_URL, OSM_TILE_ATTRIBUTION } from './mapstyle.mjs';
+import { googleStyles, lightTheme, themeColor } from './theme.mjs';
 
 /** The whole world in map coordinates (web maps stop at about 85° north and south). */
 const WORLD = { north: 85, south: -85, west: -180, east: 180 };
@@ -250,13 +250,18 @@ export function createHouseholdMap(element, configuration, onError, { readOnly =
           gestureHandling: readOnly ? 'none' : 'greedy',
           mapTypeControl: false,
           streetViewControl: false,
-          styles: GOOGLE_DARK_STYLES,
-          backgroundColor: '#1f2a36',
+          styles: googleStyles(),
+          backgroundColor: lightTheme() ? '#f5f5f5' : '#1f2a36',
           ...(readOnly
             ? { disableDefaultUI: true, keyboardShortcuts: false, clickableIcons: false }
             : {}),
         });
         info = new google.InfoWindow();
+        // Switching theme in Appearance restyles a map that's already showing.
+        const map = current;
+        window.addEventListener('narahem-theme', () => {
+          if (active && element.isConnected) map.setOptions({ styles: googleStyles() });
+        });
         provider = 'google';
         result._narahemFramed = false;
       } else {

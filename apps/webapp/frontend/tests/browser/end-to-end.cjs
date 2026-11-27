@@ -203,6 +203,23 @@ const BACKEND = path.resolve(__dirname, '../../../backend');
     );
     await page.getByRole('link', { name: 'dev@robiem.com' }).waitFor();
     await page.locator('.settings-section > summary').filter({ hasText: 'About' }).click();
+    // Appearance: the light theme applies at once, is remembered by this browser, and dark is
+    // the default.
+    const theme = () => page.evaluate(() => document.documentElement.dataset.theme || 'dark');
+    const background = () =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--background').trim(),
+      );
+    assert.equal(await theme(), 'dark');
+    await page.locator('.settings-section > summary').filter({ hasText: 'Appearance' }).click();
+    await page.locator('#theme-choice').selectOption('light');
+    assert.equal(await theme(), 'light');
+    assert.equal(await background(), '#ebebeb');
+    assert.equal(await page.evaluate(() => localStorage.getItem('narahem.theme')), 'light');
+    await page.locator('#theme-choice').selectOption('dark');
+    assert.equal(await theme(), 'dark');
+    assert.equal(await background(), '#06143a');
+    await page.locator('.settings-section > summary').filter({ hasText: 'Appearance' }).click();
     // Opened sections stay open when the page redraws after a save.
     for (const name of ['Email', 'Storage and retention']) {
       await page.locator('.settings-section > summary').filter({ hasText: name }).click();

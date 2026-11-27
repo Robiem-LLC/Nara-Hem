@@ -97,7 +97,7 @@ export function tilesFor(view) {
   return tiles;
 }
 
-import { GOOGLE_DARK_STYLES } from './mapstyle.mjs';
+import { googleStyles } from './theme.mjs';
 
 /** Short OpenStreetMap attribution for thumbnails. */
 export const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
@@ -125,8 +125,8 @@ function unproject(x, y, zoom) {
   ];
 }
 
-/** Converts the dark map style to Static Maps style parameters. */
-export function googleStaticStyle(styles = GOOGLE_DARK_STYLES) {
+/** Converts the theme's map style (dark, or none for light) to Static Maps style parameters. */
+export function googleStaticStyle(styles = googleStyles()) {
   return styles.map((rule) =>
     [
       rule.featureType && 'feature:' + rule.featureType,

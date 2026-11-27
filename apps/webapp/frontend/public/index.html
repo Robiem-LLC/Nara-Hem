@@ -6,6 +6,7 @@
     <title>Nära Hem · Server setup</title>
     <link rel="icon" type="image/png" href="/app-icon.png" />
     <link rel="apple-touch-icon" href="/app-icon.png" />
+    <script src="/theme.js"></script>
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="/leaflet.css" />
     <script src="/client.js" defer></script>
@@ -583,6 +584,16 @@
         </p>
         <p class="subtle">Console command: <code>python manage.py diagnostics</code>.</p>
       </div></template
+    >
+    <!-- Light or dark theme, saved on this browser. -->
+    <template id="card-appearance"
+      ><h3>Appearance</h3>
+      <p class="subtle">Choose how Nära Hem looks on this browser.</p>
+      <label for="theme-choice">Theme</label
+      ><select id="theme-choice">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select></template
     >
     <!-- A member's own display username editor. -->
     <template id="card-username"

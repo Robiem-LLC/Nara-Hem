@@ -636,6 +636,10 @@ async function dashboard(user) {
     return;
   }
   showTemplate('screen-admin-settings');
+  addAppearanceCard(
+    document.getElementById('admin-settings-grid'),
+    document.getElementById('about-card'),
+  );
   view.querySelector('[data-slot="household"]').textContent = status.household;
   view.querySelector('[data-slot="public-url"]').textContent = status.public_url;
   const mailStatus = view.querySelector('[data-slot="mail-status"]');
@@ -967,6 +971,29 @@ function watchHousehold(user, accounts, navigation) {
   }, 15000);
 }
 
+/** Adds the Appearance card, where this browser picks the light or dark theme, before before. */
+function addAppearanceCard(parent, before = parent.firstChild) {
+  const box = document.createElement('section');
+  box.className = 'card';
+  showTemplate('card-appearance', box);
+  parent.insertBefore(box, before);
+  const choice = box.querySelector('#theme-choice');
+  choice.value = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  choice.addEventListener('change', () => setTheme(choice.value));
+}
+
+/** Switches to the light or dark theme and remembers it on this browser. */
+function setTheme(theme) {
+  if (theme === 'light') document.documentElement.dataset.theme = 'light';
+  else delete document.documentElement.dataset.theme;
+  try {
+    localStorage.setItem('narahem.theme', theme);
+  } catch {
+    // Storage can be blocked: the theme still changes for this visit.
+  }
+  window.dispatchEvent(new Event('narahem-theme'));
+}
+
 /** Adds a form for changing the user's display name. */
 function addUsernameEditor(parent, user) {
   const box = document.createElement('section');
@@ -1002,7 +1029,10 @@ async function manageHousehold(user) {
   }
   showTemplate('screen-household');
   if (user.role !== 'admin') view.querySelector('#invite').remove();
-  if (user.role !== 'admin') addUsernameEditor(view, user);
+  if (user.role !== 'admin') {
+    addAppearanceCard(view);
+    addUsernameEditor(view, user);
+  }
   for (const account of accounts) {
     document.getElementById('members').append(memberCard(account, user));
   }
