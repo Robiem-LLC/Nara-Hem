@@ -40,7 +40,7 @@ In GitHub, open **Actions**, pick the workflow, click **Run workflow** and choos
 
 [`site/site.json`](../site/site.json) holds the listings: `app_store`, `google_play` and
 `alexa_skill`. The website shows each one's official badge
-([`docs/marketing/badges`](marketing/badges)) at the top of every page, and the App Store badge in
+([`docs/marketing/badges`](marketing/badges)) at the bottom right of every page, and the App Store badge in
 place of the TestFlight button. On a phone, a badge opens the store's app.
 
 The Android page and the install guide keep the APK from GitHub until Google Play is live. Then set

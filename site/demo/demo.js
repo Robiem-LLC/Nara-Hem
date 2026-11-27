@@ -461,17 +461,6 @@
             '</div>',
         ),
       );
-    const title = app.querySelector('header h1');
-    if (title && !app.querySelector('.site-stores')) {
-      const badges = Object.keys(BADGES).map(storeBadge).join('');
-      if (badges) {
-        title.insertAdjacentHTML('afterend', `<div class="site-stores">${badges}</div>`);
-        const row = element('<div class="site-title"></div>');
-        title.before(row);
-        row.append(title, app.querySelector('.site-stores'));
-        alignStores();
-      }
-    }
     const nav = app.querySelector('#app-nav');
     if (!nav || nav.querySelector('#open-ios')) return;
     nav.insertAdjacentHTML(
@@ -482,22 +471,7 @@
     );
   }
 
-  /** Starts the header's badges where the Admin settings tab starts, when they fit beside the
-   * wordmark; on a narrow screen they sit under it. */
-  function alignStores() {
-    const stores = app.querySelector('.site-stores');
-    const title = app.querySelector('header h1');
-    const tab = app.querySelector('#open-settings');
-    if (!stores || !title) return;
-    stores.style.marginLeft = '';
-    if (!tab?.offsetParent || window.innerWidth <= 760) return;
-    // The row already leaves 16px between the wordmark and the badges.
-    const extra = tab.getBoundingClientRect().left - title.getBoundingClientRect().right - 16;
-    if (extra > 0) stores.style.marginLeft = `${extra}px`;
-  }
-  window.addEventListener('resize', alignStores);
-
-  /** The site's footer, in place of the app's. */
+  /** The site's footer, in place of the app's, with the store and Alexa badges on the right. */
   function siteFooter() {
     const links = [
       ['Install', SITE.install || 'setup.html'],
@@ -508,9 +482,11 @@
       .filter(([, href]) => href)
       .map(([label, href]) => `<a href="${escape(href)}">${label}</a>`)
       .join(' · ');
+    const badges = Object.keys(BADGES).map(storeBadge).join('');
     return (
-      '<footer>Every person, place and trip on this page is made up. ' +
-      `${links}${SITE.contact ? ` · <a href="mailto:${escape(SITE.contact)}">${escape(SITE.contact)}</a>` : ''}</footer>`
+      '<footer class="site-footer"><p>Every person, place and trip on this page is made up. ' +
+      `${links}${SITE.contact ? ` · <a href="mailto:${escape(SITE.contact)}">${escape(SITE.contact)}</a>` : ''}</p>` +
+      `${badges ? `<div class="site-stores">${badges}</div>` : ''}</footer>`
     );
   }
 

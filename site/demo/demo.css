@@ -197,18 +197,23 @@ main {
   width: auto;
 }
 
-/* The header's row: the wordmark, then the App Store, Google Play and Alexa badges. */
-.site-title {
+/* The footer: the notes on the left, the App Store, Google Play and Alexa badges on the right. */
+.site-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 16px;
+  justify-content: space-between;
+  gap: 16px;
+}
+.site-footer p {
+  margin: 0;
 }
 .site-stores {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
 }
 .site-alexa-badge {
   margin-top: 16px;
