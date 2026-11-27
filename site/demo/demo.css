@@ -196,3 +196,20 @@ main {
   height: 40px;
   width: auto;
 }
+
+/* The header's row: the wordmark, then the App Store, Google Play and Alexa badges. */
+.site-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+.site-stores {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.site-alexa-badge {
+  margin-top: 16px;
+}

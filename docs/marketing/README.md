@@ -22,14 +22,16 @@ the two folders.
 
 ## `badges/`
 
-Apple's "Download on the App Store" (`app-store.svg`) and Google's "Get it on Google Play"
-(`google-play.png`) badges, as each company publishes them. The website shows them once the app
-links point at the stores ([releasing](../releasing.md#once-the-apps-are-in-the-stores)). Both
-stores' rules: don't change a badge's colours, words or shape, show them the same height side by
-side, leave space around each, and link each to the app's page in its store. They're the official
-files, not made by `store.py`: get new ones from
-[Apple](https://toolbox.marketingtools.apple.com/en-us/app-store/us) and
-[Google](https://play.google.com/intl/en_us/badges/).
+The official badges: Apple's "Download on the App Store" (`app-store.svg`), Google's "Get it on
+Google Play" (`google-play.png`) and Amazon's "Just Ask Alexa" (`just-ask-alexa.png`, with the
+white outside its border made see-through). The website shows them with the links in
+[`site/site.json`](../../site/site.json) ([store links](../releasing.md#store-links)). The rules
+from all three: don't change a badge's colours, words or shape, show them the same height side by
+side, leave space around each, and link each to the listing. They're the companies' own files, not
+made by `store.py`: get new ones from
+[Apple](https://toolbox.marketingtools.apple.com/en-us/app-store/us),
+[Google](https://play.google.com/intl/en_us/badges/) and
+[Amazon](https://developer.amazon.com/en-US/alexa/branding/alexa-guidelines/brand-guidelines/alexa-badges).
 
 ## Updating them
 

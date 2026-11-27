@@ -36,21 +36,19 @@ In GitHub, open **Actions**, pick the workflow, click **Run workflow** and choos
   **Downloads** → **ReTrace mapping file**) so crash reports show real names. Every run also keeps
   its files, bundle and mapping included, as a download on the run for 30 days.
 
-## Once the apps are in the stores
+## Store links
 
-The app links come from two repository variables (**Settings** → **Secrets and variables** →
-**Actions** → **Variables**): `NARAHEM_IOS_APP_URL` (TestFlight until then) and
-`NARAHEM_ANDROID_APP_URL` (the latest GitHub Release APK until then). Once a store listing is
-public, set its variable to the store page:
+[`site/site.json`](../site/site.json) holds the listings: `app_store`, `google_play` and
+`alexa_skill`. The website shows each one's official badge
+([`docs/marketing/badges`](marketing/badges)) at the top of every page, and the App Store badge in
+place of the TestFlight button. On a phone, a badge opens the store's app.
 
-- **App Store:** `https://apps.apple.com/app/id<Apple ID>`, the Apple ID being the number in App
-  Store Connect → the app → **App Information**.
-- **Google Play:** `https://play.google.com/store/apps/details?id=com.robiem.narahem`.
-
-The next push to `main` then shows the store's official badge
-([`docs/marketing/badges`](marketing/badges)) on the website in place of the plain button, which
-opens the store app on a phone. The Android page keeps a link to the APK for phones without
-Google Play. The server image built by the same push puts the store links in invitation emails.
+The Android page and the install guide keep the APK from GitHub until Google Play is live. Then set
+the `NARAHEM_ANDROID_APP_URL` repository variable (**Settings** → **Secrets and variables** →
+**Actions** → **Variables**) to the `google_play` link: the next push to `main` shows the Google
+Play badge there too, with the APK beside it for phones without Google Play, and the server image
+built by that push puts the Play link in invitation emails. `NARAHEM_IOS_APP_URL` does the same for
+the iPhone link in invitation emails: the App Store link in place of TestFlight.
 
 ## Versions
 

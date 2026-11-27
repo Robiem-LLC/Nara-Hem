@@ -28,11 +28,12 @@ STACK = HERE.parent / "deploy/portainer-stack.yaml"
 WEB = HERE.parent / "apps/webapp"
 BADGES = HERE.parent / "docs/marketing/badges"
 
-# The official store badges (docs/marketing/badges), shown in place of a plain button once an
-# app link points at its store: the store's address, the badge and its words.
-STORES = {
-    "testflight": ("apps.apple.com", "app-store.svg", "Download on the App Store"),
-    "android": ("play.google.com", "google-play.png", "Get it on Google Play"),
+# The official badges (docs/marketing/badges): the site.json link each one opens, its image and
+# its words. The stores and Amazon ask that they're shown unchanged and link to the listing.
+BADGE_FILES = {
+    "app_store": ("app-store.svg", "Download on the App Store"),
+    "google_play": ("google-play.png", "Get it on Google Play"),
+    "alexa_skill": ("just-ask-alexa.png", "Just ask Alexa"),
 }
 
 DEMO_FILES = {
@@ -130,36 +131,39 @@ def button(link, label):
     return f'<span class="button disabled">{label}: opening soon</span>'
 
 
-def in_store(link, platform):
-    """Returns True if the app link is the app's App Store or Google Play page."""
-    return urlsplit(link).hostname == STORES[platform][0]
-
-
-def store_badge(link, platform):
-    """Returns the store's official badge linking to the app's page, unchanged as each store's
-    rules ask, or an empty string if the link isn't a store page.
+def badge(config, store):
+    """Returns the badge linking to the listing named in site.json, or an empty string if there
+    is none.
     """
-    if not in_store(link, platform):
+    if not config.get(store):
         return ""
-    _, image, words = STORES[platform]
+    image, words = BADGE_FILES[store]
     return (
-        f'<a class="store-badge" href="{html.escape(link)}">'
+        f'<a class="store-badge" href="{html.escape(config[store])}">'
         f'<img src="badges/{image}" alt="{words}" height="40" /></a>'
     )
 
 
-def install_apps(config):
-    """Returns the setup page's app links: each store's badge once the app is in it, otherwise
-    a plain link to TestFlight or the Android download.
+def on_google_play(config):
+    """Returns True once the Android link is the Google Play page, so the Android download is
+    shown as the Google Play badge. Until then it's the APK from GitHub.
     """
-    plain = {"testflight": "iPhone (TestFlight)", "android": "Android"}
-    links = [
-        store_badge(config[platform], platform)
-        or f'<a href="{html.escape(config[platform])}">{label}</a>'
-        for platform, label in plain.items()
-        if config[platform]
-    ]
-    return f'<span class="store-badges">{"".join(links)}</span>' if links else ""
+    return urlsplit(config["android"]).hostname == "play.google.com"
+
+
+def install_apps(config):
+    """Returns the setup page's app links: the App Store badge, or TestFlight without one, and the
+    Google Play badge once the Android link is the Play page, otherwise the Android download.
+    """
+    iphone = badge(config, "app_store") or (
+        config["testflight"]
+        and f'<a href="{html.escape(config["testflight"])}">iPhone (TestFlight)</a>'
+    )
+    android = (badge(config, "google_play") if on_google_play(config) else "") or (
+        config["android"] and f'<a href="{html.escape(config["android"])}">Android</a>'
+    )
+    links = "".join(link for link in (iphone, android) if link)
+    return f'<span class="store-badges">{links}</span>' if links else ""
 
 
 def phones_section(media, product):
@@ -262,7 +266,8 @@ def main(media, output):
         **{k: config.get(k, "") for k in ("name", "github", "testflight", "android", "contact")},
         "alexa_name": config.get("alexa_name") or config["name"],
         "install": "setup.html",
-        "store": {name: in_store(config[name], name) for name in STORES},
+        **{store: config.get(store, "") for store in BADGE_FILES},
+        "on_google_play": on_google_play(config),
         **(
             {"google_maps_key": key, "google_styles": google_styles()}
             if (key := os.environ.get(GOOGLE_KEY, "").strip())

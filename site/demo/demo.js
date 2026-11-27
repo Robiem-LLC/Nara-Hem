@@ -225,16 +225,20 @@
         `${external ? ' data-external' : ''}>${escape(label)}</button>`
       : '';
 
-  /** The store's official badge, linking to the app's page there. */
-  const storeBadge = (platform) => {
-    const [href, image, words] =
-      platform === 'ios'
-        ? [SITE.testflight, 'app-store.svg', 'Download on the App Store']
-        : [SITE.android, 'google-play.png', 'Get it on Google Play'];
-    return (
-      `<a class="store-badge" href="${escape(href)}" target="_blank" rel="noopener">` +
-      `<img src="badges/${image}" alt="${words}" height="40" /></a>`
-    );
+  /** The official badges: the site.json link each opens, its image and its words. */
+  const BADGES = {
+    app_store: ['app-store.svg', 'Download on the App Store'],
+    google_play: ['google-play.png', 'Get it on Google Play'],
+    alexa_skill: ['just-ask-alexa.png', 'Just ask Alexa'],
+  };
+
+  /** A badge linking to its listing, or nothing without a link in site.json. */
+  const storeBadge = (store) => {
+    const [image, words] = BADGES[store];
+    return SITE[store]
+      ? `<a class="store-badge" href="${escape(SITE[store])}" target="_blank" rel="noopener">` +
+          `<img src="badges/${image}" alt="${words}" height="40" /></a>`
+      : '';
   };
 
   /** The real app, filmed on a phone, playing inside a phone frame. */
@@ -262,8 +266,8 @@
             <li>Choose who in the household can see you.</li>
           </ul>
           ${
-            SITE.store?.testflight
-              ? `<div class="links">${storeBadge('ios')}</div>
+            SITE.app_store
+              ? `<div class="links">${storeBadge('app_store')}</div>
           <p class="subtle">Needs iOS 17 or later.</p>`
               : `<div class="links">${linkButton('Join the beta on TestFlight', SITE.testflight)}</div>
           <p class="subtle">Needs iOS 17 or later. Install Apple's TestFlight app first, then
@@ -285,8 +289,8 @@
             <li>Choose who in the household can see you.</li>
           </ul>
           ${
-            SITE.store?.android
-              ? `<div class="links">${storeBadge('android')}${linkButton(
+            SITE.on_google_play
+              ? `<div class="links">${storeBadge('google_play')}${linkButton(
                   'Download the APK',
                   SITE.github && `${SITE.github}/releases/latest`,
                   true,
@@ -327,6 +331,7 @@
           <div class="links">
             ${linkButton('Alexa setup guide', SITE.github && SITE.github + '/blob/main/docs/alexa.md', true)}
           </div>
+          <div class="links site-alexa-badge">${storeBadge('alexa_skill')}</div>
         </div>
       </section>`,
   };
@@ -363,8 +368,8 @@
     ],
     ios: [
       'iPhone app',
-      'Join the public TestFlight beta, then sign in with the server address and account ' +
-        'from your invitation.',
+      (SITE.app_store ? 'Get it on the App Store' : 'Join the public TestFlight beta') +
+        ', then sign in with the server address and account from your invitation.',
     ],
     android: [
       'Android app',
@@ -456,6 +461,17 @@
             '</div>',
         ),
       );
+    const title = app.querySelector('header h1');
+    if (title && !app.querySelector('.site-stores')) {
+      const badges = Object.keys(BADGES).map(storeBadge).join('');
+      if (badges) {
+        title.insertAdjacentHTML('afterend', `<div class="site-stores">${badges}</div>`);
+        const row = element('<div class="site-title"></div>');
+        title.before(row);
+        row.append(title, app.querySelector('.site-stores'));
+        alignStores();
+      }
+    }
     const nav = app.querySelector('#app-nav');
     if (!nav || nav.querySelector('#open-ios')) return;
     nav.insertAdjacentHTML(
@@ -465,6 +481,21 @@
         '<button id="open-alexa" class="secondary">Alexa</button>',
     );
   }
+
+  /** Starts the header's badges where the Admin settings tab starts, when they fit beside the
+   * wordmark; on a narrow screen they sit under it. */
+  function alignStores() {
+    const stores = app.querySelector('.site-stores');
+    const title = app.querySelector('header h1');
+    const tab = app.querySelector('#open-settings');
+    if (!stores || !title) return;
+    stores.style.marginLeft = '';
+    if (!tab?.offsetParent || window.innerWidth <= 760) return;
+    // The row already leaves 16px between the wordmark and the badges.
+    const extra = tab.getBoundingClientRect().left - title.getBoundingClientRect().right - 16;
+    if (extra > 0) stores.style.marginLeft = `${extra}px`;
+  }
+  window.addEventListener('resize', alignStores);
 
   /** The site's footer, in place of the app's. */
   function siteFooter() {
